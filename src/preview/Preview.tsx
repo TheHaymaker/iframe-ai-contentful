@@ -116,8 +116,22 @@ function SelectionOverlay({ nodeId }: { nodeId: string }) {
 
   useEffect(() => {
     const el = document.querySelector(`[data-node-id="${nodeId}"]`);
-    if (el) setRect(el.getBoundingClientRect());
-    else setRect(null);
+    if (!el) { setRect(null); return; }
+
+    const update = () => setRect(el.getBoundingClientRect());
+    update();
+
+    window.addEventListener("scroll", update, { passive: true, capture: true });
+    window.addEventListener("resize", update, { passive: true });
+
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+
+    return () => {
+      window.removeEventListener("scroll", update, { capture: true });
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
   }, [nodeId]);
 
   if (!rect) return null;
