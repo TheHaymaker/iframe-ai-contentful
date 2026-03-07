@@ -66,6 +66,7 @@ export function ImportTab({ postMessage }: Props) {
       payload: parsedTree,
       sourceId: "hub",
       targetIds,
+      mergeMode,
     });
     setSent(true);
   }, [parsedTree, getSelectedTargetIds, postMessage, setImportError]);
