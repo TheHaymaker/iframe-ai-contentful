@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ComponentPalette } from "./ComponentPalette";
 import { TreeOutline } from "./TreeOutline";
 import { PropEditor } from "./PropEditor";
@@ -29,8 +29,15 @@ export function Sidebar({
   const [tab, setTab] = useState<Tab>("palette");
 
   const selectedNode = selectedNodeId ? findNode(nodes, selectedNodeId) : null;
-  // Auto-switch to props tab when a node is selected
-  const activeTab = selectedNode && tab === "palette" ? "props" : tab;
+
+  // Auto-switch to props tab only when selection changes, so manual tab clicks still work
+  useEffect(() => {
+    if (selectedNodeId) {
+      setTab("props");
+    }
+  }, [selectedNodeId]);
+
+  const activeTab = tab;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
