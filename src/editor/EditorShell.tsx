@@ -137,53 +137,70 @@ export function EditorShell() {
       <div
         style={{
           flex: 1,
-          backgroundColor: "#f1f5f9",
+          backgroundColor: "#e2e8f0",
           position: "relative",
+          padding: 16,
         }}
       >
-        {/* Drop-capture overlay — only present during a drag.
-            Rendered synchronously via flushSync so it exists before the
-            cursor can reach the iframe. With zIndex: 10 it sits above the
-            iframe, ensuring DnD events fire in the parent document. */}
-        {isDragging && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 10,
-              backgroundColor: isDragOver ? "rgba(59, 130, 246, 0.08)" : "transparent",
-              border: isDragOver ? "2px dashed #3b82f6" : "2px dashed transparent",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#3b82f6",
-              fontFamily: "system-ui",
-              gap: 8,
-              transition: "background-color 0.1s, border-color 0.1s",
-            }}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
-            {isDragOver && (
-              <>
-                <span style={{ fontSize: 24 }}>+</span> Drop to add component
-              </>
-            )}
-          </div>
-        )}
-        <iframe
-          ref={iframeRef}
-          src="/preview.html"
-          title="Preview"
+        {/* Inner frame — gives the iframe a distinct border + shadow */}
+        <div
           style={{
+            position: "relative",
             width: "100%",
             height: "100%",
-            border: "none",
+            borderRadius: 8,
+            border: "1px solid #cbd5e1",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+            overflow: "hidden",
+            backgroundColor: "#ffffff",
           }}
-        />
+        >
+          {/* Drop-capture overlay — only present during a drag.
+              Rendered synchronously via flushSync so it exists before the
+              cursor can reach the iframe. With zIndex: 10 it sits above the
+              iframe, ensuring DnD events fire in the parent document. */}
+          {isDragging && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 10,
+                borderRadius: 8,
+                backgroundColor: isDragOver ? "rgba(59, 130, 246, 0.08)" : "transparent",
+                border: isDragOver ? "2px dashed #3b82f6" : "2px dashed transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: 600,
+                color: "#3b82f6",
+                fontFamily: "system-ui",
+                gap: 8,
+                transition: "background-color 0.1s, border-color 0.1s",
+              }}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              {isDragOver && (
+                <>
+                  <span style={{ fontSize: 24 }}>+</span> Drop to add component
+                </>
+              )}
+            </div>
+          )}
+          <iframe
+            ref={iframeRef}
+            src="/preview.html"
+            title="Preview"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              display: "block",
+            }}
+          />
+        </div>
       </div>
     </div>
   );
