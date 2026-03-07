@@ -23,7 +23,7 @@ export function HubShell() {
     subscribers,
     upsertSubscriber,
     setSubscriberTree,
-    removeStaleSubscribers,
+    removeSubscriber,
   } = useHubStore();
 
   const handleMessage = useCallback(
@@ -35,9 +35,12 @@ export function HubShell() {
         case "IFRAME_TREE_SNAPSHOT":
           setSubscriberTree(msg.sourceId, msg.payload);
           break;
+        case "IFRAME_DISCONNECT":
+          removeSubscriber(msg.sourceId);
+          break;
       }
     },
-    [upsertSubscriber, setSubscriberTree],
+    [upsertSubscriber, setSubscriberTree, removeSubscriber],
   );
 
   const { postMessage } = useBroadcastChannel({
@@ -49,12 +52,6 @@ export function HubShell() {
   useEffect(() => {
     postMessage({ type: "HUB_READY", sourceId: hubSourceId });
   }, [postMessage]);
-
-  // Prune stale subscribers every 15s
-  useEffect(() => {
-    const interval = setInterval(() => removeStaleSubscribers(60_000), 15_000);
-    return () => clearInterval(interval);
-  }, [removeStaleSubscribers]);
 
   const subscriberCount = subscribers.size;
 

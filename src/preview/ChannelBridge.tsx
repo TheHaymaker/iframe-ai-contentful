@@ -106,6 +106,15 @@ export function ChannelBridge({ nodes, sourceId, onImportTree }: Props) {
     return () => clearInterval(interval);
   }, [postMessage, sourceId, buildMeta]);
 
+  // ── Disconnect: notify hub when window is closed ────────────────────
+  useEffect(() => {
+    const handleUnload = () => {
+      postMessage({ type: "IFRAME_DISCONNECT", sourceId });
+    };
+    window.addEventListener("pagehide", handleUnload);
+    return () => window.removeEventListener("pagehide", handleUnload);
+  }, [postMessage, sourceId]);
+
   // This is a logic-only component — no UI
   return null;
 }

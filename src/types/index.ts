@@ -70,6 +70,7 @@ export type HubMessage =
   | { type: "IMPORT_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[]; mergeMode?: "append" | "replace" }
   | { type: "HUB_READY"; sourceId: string }
   | { type: "IFRAME_ANNOUNCE"; sourceId: string; meta: IframeMeta }
+  | { type: "IFRAME_DISCONNECT"; sourceId: string }
   | { type: "REQUEST_SNAPSHOT"; sourceId: string; targetIds?: string[] }
   | { type: "GENERATE_RESULT"; payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
   | { type: "BROADCAST_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds: string[] };
