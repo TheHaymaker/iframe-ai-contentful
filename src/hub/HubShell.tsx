@@ -1,32 +1,43 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback } from "react";
 import { useBroadcastChannel } from "../hooks/useBroadcastChannel";
 import { CHANNEL_NAME, generateSourceId } from "../constants";
-import type { HubMessage, ComponentTreeNode, IframeMeta } from "../types";
+import { useHubStore, type HubTab } from "./store";
+import { ExportTab } from "./tabs/ExportTab";
+import { ImportTab } from "./tabs/ImportTab";
+import { GenerateTab } from "./tabs/GenerateTab";
+import type { HubMessage } from "../types";
 
 const hubSourceId = generateSourceId();
 
-/**
- * Stub Hub shell — announces itself on mount and listens for iframe data.
- * Full tab UI (Export / Import / Generate) will be built in Phase 5.
- */
-export function HubShell() {
-  const [subscribers, setSubscribers] = useState<Map<string, IframeMeta>>(new Map());
-  const [latestTree, setLatestTree] = useState<ComponentTreeNode[]>([]);
+const TABS: { key: HubTab; label: string }[] = [
+  { key: "export", label: "Export" },
+  { key: "import", label: "Import" },
+  { key: "generate", label: "Generate" },
+];
 
-  const handleMessage = useCallback((msg: HubMessage) => {
-    switch (msg.type) {
-      case "IFRAME_ANNOUNCE":
-        setSubscribers((prev) => {
-          const next = new Map(prev);
-          next.set(msg.sourceId, msg.meta);
-          return next;
-        });
-        break;
-      case "IFRAME_TREE_SNAPSHOT":
-        setLatestTree(msg.payload);
-        break;
-    }
-  }, []);
+export function HubShell() {
+  const {
+    activeTab,
+    setActiveTab,
+    subscribers,
+    upsertSubscriber,
+    setSubscriberTree,
+    removeStaleSubscribers,
+  } = useHubStore();
+
+  const handleMessage = useCallback(
+    (msg: HubMessage) => {
+      switch (msg.type) {
+        case "IFRAME_ANNOUNCE":
+          upsertSubscriber(msg.sourceId, msg.meta);
+          break;
+        case "IFRAME_TREE_SNAPSHOT":
+          setSubscriberTree(msg.sourceId, msg.payload);
+          break;
+      }
+    },
+    [upsertSubscriber, setSubscriberTree],
+  );
 
   const { postMessage } = useBroadcastChannel({
     channelName: CHANNEL_NAME,
@@ -38,69 +49,128 @@ export function HubShell() {
     postMessage({ type: "HUB_READY", sourceId: hubSourceId });
   }, [postMessage]);
 
-  return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ margin: "0 0 16px", fontSize: 20, color: "#0f172a" }}>CMS Hub</h1>
-      <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 24px" }}>
-        Connected iframes: {subscribers.size} &middot; Tree nodes: {latestTree.length}
-      </p>
+  // Prune stale subscribers every 15s
+  useEffect(() => {
+    const interval = setInterval(() => removeStaleSubscribers(60_000), 15_000);
+    return () => clearInterval(interval);
+  }, [removeStaleSubscribers]);
 
-      {/* Subscriber list */}
-      {subscribers.size > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 13, color: "#64748b", textTransform: "uppercase", margin: "0 0 8px" }}>
-            Connected Windows
-          </h3>
-          {Array.from(subscribers.values()).map((meta) => (
+  const subscriberCount = subscribers.size;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        fontFamily: "system-ui",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "12px 20px",
+          borderBottom: "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          backgroundColor: "#fff",
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+          CMS Hub
+        </h1>
+        <span style={{ fontSize: 12, color: "#64748b" }}>
+          {subscriberCount} connected window{subscriberCount !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {/* Connected windows bar */}
+      {subscriberCount > 0 && (
+        <div
+          style={{
+            padding: "8px 20px",
+            borderBottom: "1px solid #e2e8f0",
+            display: "flex",
+            gap: 6,
+            overflowX: "auto",
+            backgroundColor: "#fafafa",
+          }}
+        >
+          {Array.from(subscribers.values()).map((entry) => (
             <div
-              key={meta.sourceId}
+              key={entry.meta.sourceId}
               style={{
-                padding: "8px 12px",
+                padding: "4px 10px",
                 border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                marginBottom: 4,
-                fontSize: 12,
+                borderRadius: 4,
+                fontSize: 11,
                 fontFamily: "monospace",
+                backgroundColor: "#fff",
+                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              {meta.title} — {meta.componentCount} components
-              <span style={{ color: "#94a3b8", marginLeft: 8 }}>
-                {meta.sourceId.slice(0, 8)}
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  backgroundColor:
+                    Date.now() - entry.lastSeen < 15_000 ? "#22c55e" : "#f59e0b",
+                  display: "inline-block",
+                }}
+              />
+              {entry.meta.title}
+              <span style={{ color: "#94a3b8" }}>
+                {entry.meta.sourceId.slice(0, 6)}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Placeholder tabs */}
+      {/* Tab bar */}
       <div
         style={{
           display: "flex",
-          gap: 8,
-          padding: "12px 0",
-          borderTop: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e2e8f0",
+          backgroundColor: "#fff",
         }}
       >
-        {["Export", "Import", "Generate"].map((tab) => (
+        {TABS.map((tab) => (
           <button
-            key={tab}
+            key={tab.key}
             type="button"
+            onClick={() => setActiveTab(tab.key)}
             style={{
-              padding: "8px 16px",
-              border: "1px solid #e2e8f0",
-              borderRadius: 6,
-              backgroundColor: "#fff",
-              cursor: "pointer",
+              flex: 1,
+              padding: "10px 0",
+              border: "none",
+              borderBottom:
+                activeTab === tab.key ? "2px solid #3b82f6" : "2px solid transparent",
+              backgroundColor: "transparent",
+              color: activeTab === tab.key ? "#1d4ed8" : "#64748b",
               fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
             }}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
-      <p style={{ color: "#94a3b8", fontSize: 13, marginTop: 12 }}>
-        Full tab UI coming in Phase 5.
-      </p>
+
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+        {activeTab === "export" && <ExportTab postMessage={postMessage} />}
+        {activeTab === "import" && <ImportTab postMessage={postMessage} />}
+        {activeTab === "generate" && <GenerateTab postMessage={postMessage} />}
+      </div>
     </div>
   );
 }
