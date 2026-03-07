@@ -20,12 +20,18 @@ export function EditorShell() {
   } = useTreeStore();
 
   // ── Track drag state so we can punch through the iframe ───────────
-  const [isDragging, setIsDragging] = useState(false);
+  // Use direct DOM mutation (not React state) so pointer-events are disabled
+  // synchronously on dragstart — before the cursor can enter the iframe.
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
-    const onDragStart = () => setIsDragging(true);
-    const onDragEnd = () => { setIsDragging(false); setIsDragOver(false); };
+    const onDragStart = () => {
+      if (iframeRef.current) iframeRef.current.style.pointerEvents = "none";
+    };
+    const onDragEnd = () => {
+      if (iframeRef.current) iframeRef.current.style.pointerEvents = "";
+      setIsDragOver(false);
+    };
     document.addEventListener("dragstart", onDragStart);
     document.addEventListener("dragend", onDragEnd);
     return () => {
@@ -173,9 +179,6 @@ export function EditorShell() {
             width: "100%",
             height: "100%",
             border: "none",
-            // Disable pointer events on the iframe while a drag is in progress
-            // so the parent div's onDrop / onDragOver handlers receive the events
-            pointerEvents: isDragging ? "none" : "auto",
           }}
         />
       </div>
