@@ -20,8 +20,8 @@ export function JsonPreview({ data }: Props) {
       /<span style="color:#059669">"([^"]+)"<\/span>:/g,
       '<span style="color:#8b5cf6">"$1"</span>:',
     )
-    // numbers
-    .replace(/\b(\d+\.?\d*)\b/g, '<span style="color:#d97706">$1</span>')
+    // numbers ((?<!#) prevents matching hex color codes in span style attributes)
+    .replace(/(?<!#)\b(\d+\.?\d*)\b/g, '<span style="color:#d97706">$1</span>')
     // booleans & null
     .replace(/\b(true|false|null)\b/g, '<span style="color:#dc2626">$1</span>');
 
