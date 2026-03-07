@@ -18,6 +18,7 @@ interface HubState {
   subscribers: Map<string, SubscriberEntry>;
   upsertSubscriber: (sourceId: string, meta: IframeMeta) => void;
   setSubscriberTree: (sourceId: string, tree: ComponentTreeNode[]) => void;
+  removeSubscriber: (sourceId: string) => void;
   removeStaleSubscribers: (maxAge: number) => void;
 
   // ── Tree selection (Export tab) ────────────────────────────────────
@@ -54,10 +55,13 @@ export const useHubStore = create<HubState>((set, get) => ({
         lastSeen: Date.now(),
         tree: existing?.tree ?? [],
       });
-      // Auto-select new subscribers
-      const targets = new Set(state.selectedTargets);
-      targets.add(sourceId);
-      return { subscribers: next, selectedTargets: targets };
+      // Auto-select only on first registration, not on every heartbeat
+      if (!existing) {
+        const targets = new Set(state.selectedTargets);
+        targets.add(sourceId);
+        return { subscribers: next, selectedTargets: targets };
+      }
+      return { subscribers: next };
     }),
   setSubscriberTree: (sourceId, tree) =>
     set((state) => {
@@ -79,6 +83,14 @@ export const useHubStore = create<HubState>((set, get) => ({
         });
       }
       return { subscribers: next };
+    }),
+  removeSubscriber: (sourceId) =>
+    set((state) => {
+      const next = new Map(state.subscribers);
+      next.delete(sourceId);
+      const targets = new Set(state.selectedTargets);
+      targets.delete(sourceId);
+      return { subscribers: next, selectedTargets: targets };
     }),
   removeStaleSubscribers: (maxAge) =>
     set((state) => {
