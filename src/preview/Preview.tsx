@@ -127,10 +127,14 @@ function SelectionOverlay({ nodeId }: { nodeId: string }) {
     const ro = new ResizeObserver(update);
     ro.observe(el);
 
+    const mo = new MutationObserver(update);
+    mo.observe(document.body, { childList: true, subtree: true });
+
     return () => {
       window.removeEventListener("scroll", update, { capture: true });
       window.removeEventListener("resize", update);
       ro.disconnect();
+      mo.disconnect();
     };
   }, [nodeId]);
 
