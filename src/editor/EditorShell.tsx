@@ -30,6 +30,7 @@ export function EditorShell() {
   }, [selectedNodeId]);
 
   // ── Listen for messages from iframe ────────────────────────────────
+  const { setTree } = useTreeStore.getState();
   useEffect(() => {
     return listenInEditor((msg: PreviewMessage) => {
       switch (msg.type) {
@@ -40,9 +41,16 @@ export function EditorShell() {
         case "NODE_CLICKED":
           selectNode(msg.nodeId);
           break;
+        case "TREE_UPDATED":
+          // Hub imported new nodes into the iframe — sync to editor store
+          useTreeStore.getState().setTree([
+            ...useTreeStore.getState().nodes,
+            ...msg.payload,
+          ]);
+          break;
       }
     });
-  }, [selectNode]);
+  }, [selectNode, setTree]);
 
   // ── Drop handler for components dragged from palette onto iframe ──
   const handleDrop = useCallback(

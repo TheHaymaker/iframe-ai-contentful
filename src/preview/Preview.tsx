@@ -1,10 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ComponentRenderer } from "../components";
 import {
   listenInPreview,
   postToEditor,
   type EditorMessage,
 } from "../lib/postMessageBridge";
+import { generateSourceId } from "../constants";
+import { HubLauncher } from "./HubLauncher";
+import { ChannelBridge } from "./ChannelBridge";
 import type { ComponentTreeNode } from "../types";
 
 /**
@@ -15,6 +18,15 @@ import type { ComponentTreeNode } from "../types";
 export function Preview() {
   const [nodes, setNodes] = useState<ComponentTreeNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Stable unique id for this iframe instance (persists across re-renders)
+  const sourceId = useMemo(() => generateSourceId(), []);
+
+  // Handler for trees imported via BroadcastChannel from the Hub
+  const handleImportTree = useCallback((imported: ComponentTreeNode[]) => {
+    setNodes((prev) => [...prev, ...imported]);
+    postToEditor({ type: "TREE_UPDATED", payload: imported });
+  }, []);
 
   // Apply incoming editor messages to local state
   const handleMessage = useCallback((msg: EditorMessage) => {
@@ -68,6 +80,10 @@ export function Preview() {
       onClick={handleClick}
       style={{ minHeight: "100vh", position: "relative" }}
     >
+      {/* BroadcastChannel bridge to Hub popup */}
+      <ChannelBridge nodes={nodes} sourceId={sourceId} onImportTree={handleImportTree} />
+      {/* Hub launcher button */}
+      <HubLauncher />
       {/* Selection highlight overlay */}
       {selectedId && <SelectionOverlay nodeId={selectedId} />}
       <ComponentRenderer nodes={nodes} />
