@@ -26,6 +26,13 @@ interface HubState {
   selectSource: (sourceId: string | null) => void;
   selectNode: (nodeId: string | null) => void;
 
+  // ── Multi-target selection ──────────────────────────────────────────
+  selectedTargets: Set<string>;
+  toggleTarget: (sourceId: string) => void;
+  selectAllTargets: () => void;
+  deselectAllTargets: () => void;
+  getSelectedTargetIds: () => string[];
+
   // ── Import tab state ───────────────────────────────────────────────
   importJson: string;
   setImportJson: (json: string) => void;
@@ -47,7 +54,10 @@ export const useHubStore = create<HubState>((set) => ({
         lastSeen: Date.now(),
         tree: existing?.tree ?? [],
       });
-      return { subscribers: next };
+      // Auto-select new subscribers
+      const targets = new Set(state.selectedTargets);
+      targets.add(sourceId);
+      return { subscribers: next, selectedTargets: targets };
     }),
   setSubscriberTree: (sourceId, tree) =>
     set((state) => {
@@ -86,6 +96,32 @@ export const useHubStore = create<HubState>((set) => ({
   selectedNodePath: null,
   selectSource: (sourceId) => set({ selectedSourceId: sourceId, selectedNodePath: null }),
   selectNode: (nodeId) => set({ selectedNodePath: nodeId }),
+
+  // ── Multi-target selection ──────────────────────────────────────────
+  selectedTargets: new Set(),
+  toggleTarget: (sourceId) =>
+    set((state) => {
+      const next = new Set(state.selectedTargets);
+      if (next.has(sourceId)) next.delete(sourceId);
+      else next.add(sourceId);
+      return { selectedTargets: next };
+    }),
+  selectAllTargets: () =>
+    set((state) => ({
+      selectedTargets: new Set(state.subscribers.keys()),
+    })),
+  deselectAllTargets: () => set({ selectedTargets: new Set() }),
+  getSelectedTargetIds: () => {
+    const state = useHubStore.getState();
+    // If nothing explicitly selected, fall back to all subscribers
+    if (state.selectedTargets.size === 0) {
+      return Array.from(state.subscribers.keys());
+    }
+    // Filter out stale targets that are no longer in subscribers
+    return Array.from(state.selectedTargets).filter((id) =>
+      state.subscribers.has(id),
+    );
+  },
 
   importJson: "",
   setImportJson: (json) => set({ importJson: json, importError: null }),

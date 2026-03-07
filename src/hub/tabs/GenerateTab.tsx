@@ -89,11 +89,13 @@ export function GenerateTab({ postMessage }: Props) {
     }
   }, []);
 
+  const { getSelectedTargetIds } = useHubStore();
+
   const handleApply = useCallback(() => {
     if (!parsedResult) return;
-    const targetIds = subscriberList.map(([id]) => id);
+    const targetIds = getSelectedTargetIds();
     if (targetIds.length === 0) {
-      setError("No connected iframes.");
+      setError("No target iframes selected. Check the targets above.");
       return;
     }
     postMessage({
@@ -103,7 +105,7 @@ export function GenerateTab({ postMessage }: Props) {
       targetIds,
     });
     setSent(true);
-  }, [parsedResult, subscriberList, postMessage]);
+  }, [parsedResult, getSelectedTargetIds, postMessage]);
 
   return (
     <div
@@ -269,19 +271,19 @@ export function GenerateTab({ postMessage }: Props) {
         <button
           type="button"
           onClick={handleApply}
-          disabled={!parsedResult || subscriberList.length === 0}
+          disabled={!parsedResult || getSelectedTargetIds().length === 0}
           style={{
             padding: "8px 24px",
-            backgroundColor: parsedResult ? "#8b5cf6" : "#94a3b8",
+            backgroundColor: parsedResult && getSelectedTargetIds().length > 0 ? "#8b5cf6" : "#94a3b8",
             color: "#fff",
             border: "none",
             borderRadius: 6,
             fontSize: 13,
             fontWeight: 600,
-            cursor: parsedResult ? "pointer" : "not-allowed",
+            cursor: parsedResult && getSelectedTargetIds().length > 0 ? "pointer" : "not-allowed",
           }}
         >
-          Apply to {subscriberList.length} iframe{subscriberList.length !== 1 ? "s" : ""}
+          Apply to {getSelectedTargetIds().length} target{getSelectedTargetIds().length !== 1 ? "s" : ""}
         </button>
         {sent && (
           <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>

@@ -53,12 +53,14 @@ export function ImportTab({ postMessage }: Props) {
     [setImportJson, setImportError],
   );
 
+  const { getSelectedTargetIds } = useHubStore();
+
   const handleSend = useCallback(() => {
     if (!parsedTree) return;
 
-    const targetIds = subscriberList.map(([id]) => id);
+    const targetIds = getSelectedTargetIds();
     if (targetIds.length === 0) {
-      setImportError("No connected iframes to send to.");
+      setImportError("No target iframes selected. Check the targets above.");
       return;
     }
 
@@ -69,7 +71,7 @@ export function ImportTab({ postMessage }: Props) {
       targetIds,
     });
     setSent(true);
-  }, [parsedTree, subscriberList, postMessage, setImportError]);
+  }, [parsedTree, getSelectedTargetIds, postMessage, setImportError]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
@@ -162,19 +164,19 @@ export function ImportTab({ postMessage }: Props) {
         <button
           type="button"
           onClick={handleSend}
-          disabled={!parsedTree || subscriberList.length === 0}
+          disabled={!parsedTree || getSelectedTargetIds().length === 0}
           style={{
             padding: "8px 24px",
-            backgroundColor: parsedTree ? "#3b82f6" : "#94a3b8",
+            backgroundColor: parsedTree && getSelectedTargetIds().length > 0 ? "#3b82f6" : "#94a3b8",
             color: "#fff",
             border: "none",
             borderRadius: 6,
             fontSize: 13,
             fontWeight: 600,
-            cursor: parsedTree ? "pointer" : "not-allowed",
+            cursor: parsedTree && getSelectedTargetIds().length > 0 ? "pointer" : "not-allowed",
           }}
         >
-          Import to {subscriberList.length} iframe{subscriberList.length !== 1 ? "s" : ""}
+          Import to {getSelectedTargetIds().length} target{getSelectedTargetIds().length !== 1 ? "s" : ""}
         </button>
         {sent && (
           <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>

@@ -2,6 +2,7 @@ import { useEffect, useCallback } from "react";
 import { useBroadcastChannel } from "../hooks/useBroadcastChannel";
 import { CHANNEL_NAME, generateSourceId } from "../constants";
 import { useHubStore, type HubTab } from "./store";
+import { ConnectedWindows } from "./components/ConnectedWindows";
 import { ExportTab } from "./tabs/ExportTab";
 import { ImportTab } from "./tabs/ImportTab";
 import { GenerateTab } from "./tabs/GenerateTab";
@@ -85,55 +86,22 @@ export function HubShell() {
         </span>
       </div>
 
-      {/* Connected windows bar */}
+      {/* Connected windows with multi-select checkboxes */}
       {subscriberCount > 0 && (
         <div
           style={{
-            padding: "8px 20px",
             borderBottom: "1px solid #e2e8f0",
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
             backgroundColor: "#fafafa",
           }}
         >
-          {Array.from(subscribers.values()).map((entry) => (
-            <div
-              key={entry.meta.sourceId}
-              style={{
-                padding: "4px 10px",
-                border: "1px solid #e2e8f0",
-                borderRadius: 4,
-                fontSize: 11,
-                fontFamily: "monospace",
-                backgroundColor: "#fff",
-                whiteSpace: "nowrap",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  backgroundColor:
-                    Date.now() - entry.lastSeen < 15_000 ? "#22c55e" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
-              {entry.meta.title}
-              <span style={{ color: "#94a3b8" }}>
-                {entry.meta.sourceId.slice(0, 6)}
-              </span>
-            </div>
-          ))}
+          <ConnectedWindows postMessage={postMessage} />
         </div>
       )}
 
       {/* Tab bar */}
       <div
+        role="tablist"
+        aria-label="Hub tabs"
         style={{
           display: "flex",
           borderBottom: "1px solid #e2e8f0",
@@ -144,6 +112,10 @@ export function HubShell() {
           <button
             key={tab.key}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`tabpanel-${tab.key}`}
+            id={`tab-${tab.key}`}
             onClick={() => setActiveTab(tab.key)}
             style={{
               flex: 1,
@@ -166,7 +138,12 @@ export function HubShell() {
       </div>
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+      <div
+        role="tabpanel"
+        id={`tabpanel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        style={{ flex: 1, overflow: "auto", padding: 20 }}
+      >
         {activeTab === "export" && <ExportTab postMessage={postMessage} />}
         {activeTab === "import" && <ImportTab postMessage={postMessage} />}
         {activeTab === "generate" && <GenerateTab postMessage={postMessage} />}

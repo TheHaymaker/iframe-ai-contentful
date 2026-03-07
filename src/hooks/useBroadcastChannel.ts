@@ -37,7 +37,15 @@ export function useBroadcastChannel({
       onMessageRef.current(event.data);
     };
 
+    // Clean up on beforeunload (page close/navigation)
+    const handleUnload = () => {
+      channel.close();
+      channelRef.current = null;
+    };
+    window.addEventListener("beforeunload", handleUnload);
+
     return () => {
+      window.removeEventListener("beforeunload", handleUnload);
       channel.close();
       channelRef.current = null;
     };

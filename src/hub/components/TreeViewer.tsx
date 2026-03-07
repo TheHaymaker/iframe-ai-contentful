@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { ComponentTreeNode } from "../../types";
 
 interface Props {
@@ -11,10 +11,11 @@ interface Props {
 /**
  * Recursive collapsible tree viewer used in the Export and Import tabs.
  * Shows component type, id, and expandable props/children.
+ * Supports keyboard navigation (Enter to select, Space to expand/collapse).
  */
 export function TreeViewer({ nodes, selectedNodeId, onSelect, depth = 0 }: Props) {
   return (
-    <div>
+    <div role="tree" aria-label="Component tree">
       {nodes.map((node) => (
         <TreeNode
           key={node.id}
@@ -43,15 +44,42 @@ function TreeNode({
   const isSelected = node.id === selectedNodeId;
   const hasChildren = node.children && node.children.length > 0;
   const propCount = Object.keys(node.props).length;
+  const isExpandable = hasChildren || propCount > 0;
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case "Enter":
+          e.preventDefault();
+          onSelect(node.id);
+          break;
+        case " ":
+          e.preventDefault();
+          if (isExpandable) setExpanded((prev) => !prev);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (isExpandable && !expanded) setExpanded(true);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (expanded) setExpanded(false);
+          break;
+      }
+    },
+    [node.id, onSelect, isExpandable, expanded],
+  );
 
   return (
-    <div>
+    <div role="treeitem" aria-expanded={isExpandable ? expanded : undefined} aria-selected={isSelected}>
       <div
+        tabIndex={0}
+        role="button"
+        aria-label={`${node.type} component ${node.id.slice(0, 8)}`}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 4,
-          paddingLeft: depth * 16,
           padding: "3px 8px",
           paddingLeft: 8 + depth * 16,
           backgroundColor: isSelected ? "#eff6ff" : "transparent",
@@ -60,8 +88,16 @@ function TreeNode({
           fontSize: 12,
           fontFamily: "monospace",
           transition: "background-color 0.1s",
+          outline: "none",
         }}
         onClick={() => onSelect(node.id)}
+        onKeyDown={handleKeyDown}
+        onFocus={(e) => {
+          if (!isSelected) e.currentTarget.style.backgroundColor = "#f8fafc";
+        }}
+        onBlur={(e) => {
+          if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+        }}
         onMouseEnter={(e) => {
           if (!isSelected) e.currentTarget.style.backgroundColor = "#f8fafc";
         }}
@@ -73,17 +109,18 @@ function TreeNode({
         <span
           onClick={(e) => {
             e.stopPropagation();
-            setExpanded(!expanded);
+            if (isExpandable) setExpanded(!expanded);
           }}
+          aria-hidden="true"
           style={{
             width: 16,
             textAlign: "center",
             color: "#94a3b8",
-            cursor: "pointer",
+            cursor: isExpandable ? "pointer" : "default",
             userSelect: "none",
           }}
         >
-          {hasChildren || propCount > 0 ? (expanded ? "\u25BC" : "\u25B6") : "\u00B7"}
+          {isExpandable ? (expanded ? "\u25BC" : "\u25B6") : "\u00B7"}
         </span>
 
         {/* Type badge */}
@@ -106,7 +143,7 @@ function TreeNode({
 
       {/* Expanded content */}
       {expanded && (
-        <div style={{ paddingLeft: 8 + depth * 16 + 20 }}>
+        <div role="group" style={{ paddingLeft: 8 + depth * 16 + 20 }}>
           {/* Props */}
           {propCount > 0 && (
             <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.6, margin: "2px 0" }}>
