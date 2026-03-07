@@ -1,5 +1,6 @@
 import { featureMap } from "../config/featureMap";
 import type { FeatureMapEntry, PropSchema } from "../types";
+import { setDragPayload } from "./dragState";
 
 interface Props {
   onAddSlice: (componentType: string, defaultProps: Record<string, unknown>) => void;
@@ -45,12 +46,14 @@ export function ComponentPalette({ onAddSlice }: Props) {
     e: React.DragEvent,
     entry: FeatureMapEntry,
   ) => {
+    const defaultProps = buildDefaultProps(entry.propSchema);
+    // Store in module-level ref so the drop handler can read it without
+    // relying on e.dataTransfer.getData(), which is unreliable in capture
+    // phase and when the drop fires inside the iframe's browsing context.
+    setDragPayload({ componentType: entry.componentType, defaultProps });
     e.dataTransfer.setData(
       "application/x-component",
-      JSON.stringify({
-        componentType: entry.componentType,
-        defaultProps: buildDefaultProps(entry.propSchema),
-      }),
+      JSON.stringify({ componentType: entry.componentType, defaultProps }),
     );
     e.dataTransfer.effectAllowed = "copy";
   };
