@@ -7,6 +7,7 @@ export const MESSAGE_TYPES = {
   IFRAME_ANNOUNCE: "IFRAME_ANNOUNCE",
   REQUEST_SNAPSHOT: "REQUEST_SNAPSHOT",
   GENERATE_RESULT: "GENERATE_RESULT",
+  BROADCAST_TREE: "BROADCAST_TREE",
 } as const;
 
 export const generateSourceId = (): string => crypto.randomUUID();

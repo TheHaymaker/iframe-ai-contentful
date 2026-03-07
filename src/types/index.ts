@@ -67,8 +67,9 @@ export interface IframeMeta {
 
 export type HubMessage =
   | { type: "IFRAME_TREE_SNAPSHOT"; payload: ComponentTreeNode[]; sourceId: string }
-  | { type: "IMPORT_TREE"; payload: ComponentTreeNode[]; sourceId: string }
+  | { type: "IMPORT_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
   | { type: "HUB_READY"; sourceId: string }
   | { type: "IFRAME_ANNOUNCE"; sourceId: string; meta: IframeMeta }
-  | { type: "REQUEST_SNAPSHOT"; sourceId: string }
-  | { type: "GENERATE_RESULT"; payload: ComponentTreeNode[]; sourceId: string };
+  | { type: "REQUEST_SNAPSHOT"; sourceId: string; targetIds?: string[] }
+  | { type: "GENERATE_RESULT"; payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
+  | { type: "BROADCAST_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds: string[] };

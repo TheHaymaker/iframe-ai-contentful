@@ -50,12 +50,15 @@ All messages conform to a typed envelope:
 ```ts
 type HubMessage =
   | { type: "IFRAME_TREE_SNAPSHOT"; payload: ComponentTreeNode[]; sourceId: string }
-  | { type: "IMPORT_TREE";         payload: ComponentTreeNode[]; sourceId: string }
+  | { type: "IMPORT_TREE";         payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
   | { type: "HUB_READY";           sourceId: string }
   | { type: "IFRAME_ANNOUNCE";     sourceId: string; meta: IframeMeta }
-  | { type: "REQUEST_SNAPSHOT";    sourceId: string }
-  | { type: "GENERATE_RESULT";     payload: ComponentTreeNode[]; sourceId: string }
+  | { type: "REQUEST_SNAPSHOT";    sourceId: string; targetIds?: string[] }
+  | { type: "GENERATE_RESULT";     payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
+  | { type: "BROADCAST_TREE";      payload: ComponentTreeNode[]; sourceId: string; targetIds: string[] }
 ```
+
+> **`targetIds`** — When present, only iframes whose `sourceId` matches an entry in this array should process the message. When omitted (single-target legacy mode), all iframes process it. The new `BROADCAST_TREE` message type is used when the Hub explicitly pushes the same data to a user-selected set of subscribers.
 
 ---
 
@@ -183,14 +186,18 @@ interface PropSchema {
 | 8.5 | **Send generated tree to iframe** | "Apply" button sends `GENERATE_RESULT` message. Iframe merges it into the tree store. |
 | 8.6 | **Error handling & retry** | Handle malformed AI output: re-prompt with error context, show user-friendly message. |
 
-### Phase 9 — Multi-Window Awareness (Future Foundation)
+### Phase 9 — Multi-Window Awareness & Multi-Target Push
 
 | # | Task | Details |
 |---|------|---------|
-| 9.1 | **Hub subscriber registry** | Hub maintains a map of `sourceId → IframeMeta` for all iframes that have announced. Display a "Connected Windows" list in the Hub sidebar. |
-| 9.2 | **Heartbeat / presence** | Iframe sends periodic `IFRAME_ANNOUNCE` (every 5s). Hub marks stale entries after timeout. |
-| 9.3 | **Target selector** | When importing or generating, user picks which iframe(s) to send data to. |
-| 9.4 | **Hub-to-Hub awareness** | If multiple Hubs open on the same channel, they can detect each other and coordinate (e.g., only one active Hub). |
+| 9.1 | **Hub subscriber registry** | Hub maintains a map of `sourceId → IframeMeta` for all iframes that have announced. Display a "Connected Windows" list in the Hub sidebar with status badges (active / stale). |
+| 9.2 | **Heartbeat / presence** | Iframe sends periodic `IFRAME_ANNOUNCE` (every 5s). Hub marks stale entries after timeout (15s). Remove entries after extended absence (60s) with option to keep pinned. |
+| 9.3 | **Multi-select target picker** | Checkbox-based UI in the Hub that lets users select one, many, or all connected iframes as push targets. Selection persists across tabs (Export/Import/Generate). "Select All" / "Deselect All" convenience buttons. |
+| 9.4 | **Broadcast to selected targets** | When the user clicks Import/Apply/Export with multiple targets selected, Hub sends a `BROADCAST_TREE` message with `targetIds: string[]`. Each iframe checks whether its own `sourceId` is in `targetIds` before processing. |
+| 9.5 | **Iframe-side target filtering** | Iframe `onmessage` handler checks `targetIds` array: if present and own `sourceId` is not included, silently ignore the message. Backwards-compatible — messages without `targetIds` are processed by all iframes. |
+| 9.6 | **Bulk snapshot request** | Hub can send `REQUEST_SNAPSHOT` with `targetIds` to fetch tree snapshots from specific iframes simultaneously. Responses are collected and displayed side-by-side in the Export tab. |
+| 9.7 | **Hub-to-Hub awareness** | If multiple Hubs open on the same channel, they detect each other via a `HUB_ANNOUNCE` heartbeat and coordinate (e.g., only one active Hub, or display a warning). |
+| 9.8 | **Cross-window diff view** | When multiple iframes are selected, show a diff summary of their component trees so the user can see what will change before pushing. |
 
 ### Phase 10 — Polish & Hardening
 
