@@ -7,10 +7,10 @@ import {
   listenInEditor,
   type PreviewMessage,
 } from "../lib/postMessageBridge";
+import { getDragPayload, setDragPayload } from "./dragState";
 
 export function EditorShell() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const frameContainerRef = useRef<HTMLDivElement>(null);
   const {
     nodes,
     selectedNodeId,
@@ -32,7 +32,11 @@ export function EditorShell() {
 
   useEffect(() => {
     const onDragStart = () => flushSync(() => setIsDragging(true));
-    const onDragEnd = () => { setIsDragging(false); setIsDragOver(false); };
+    const onDragEnd = () => {
+      setDragPayload(null); // clear module-level ref on cancel/end
+      setIsDragging(false);
+      setIsDragOver(false);
+    };
     document.addEventListener("dragstart", onDragStart);
     document.addEventListener("dragend", onDragEnd);
     return () => {
@@ -41,53 +45,53 @@ export function EditorShell() {
     };
   }, []);
 
-  // ── Capture-phase DnD listeners on the frame container ────────────────
-  // Registering in the capture phase (third arg = true) means these fire
-  // during the downward event propagation — before the event can reach the
-  // <iframe> element and be swallowed by the browser's iframe DnD handling.
-  // CSS pointer-events alone is not sufficient to intercept HTML5 DnD events
-  // from an iframe, so we rely on the capture phase here instead.
+  // ── Document-level capture-phase DnD listeners ─────────────────────────
+  // Attaching to `document` in the capture phase (third arg = true) means
+  // these fire at the very top of the propagation tree, before the event
+  // can reach any child element — including the <iframe>.
+  //
+  // We read the component payload from the module-level dragState ref rather
+  // than from e.dataTransfer.getData().  getData() is unreliable here because:
+  //   • some browsers return "" when called in the capture phase of drop
+  //   • if the browser routes the drop into the iframe's browsing context
+  //     the parent document may never see a drop event at all
+  // By storing the payload during dragstart (always in the parent document)
+  // we sidestep both problems.
   useEffect(() => {
-    const el = frameContainerRef.current;
-    if (!el) return;
-
     const onDragOverCapture = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("application/x-component")) return;
+      console.log("[DnD] dragover capture — target:", e.target, "types:", e.dataTransfer?.types);
+      if (!getDragPayload()) return; // not one of our component drags
+      console.log("[DnD] dragover capture — payload matched, calling preventDefault");
       e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
       setIsDragOver(true);
     };
 
     const onDropCapture = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("application/x-component")) return;
+      console.log("[DnD] drop capture — target:", e.target);
+      const payload = getDragPayload();
+      if (!payload) return;
+      console.log("[DnD] drop capture — payload matched:", payload.componentType);
       e.preventDefault();
-      e.stopPropagation(); // prevent the iframe from also receiving the drop
+      e.stopPropagation();
+      setDragPayload(null);
       setIsDragOver(false);
       setIsDragging(false);
-      const raw = e.dataTransfer.getData("application/x-component");
-      if (!raw) return;
-      const { componentType, defaultProps } = JSON.parse(raw);
-      addSlice(componentType, defaultProps);
+      console.log("[DnD] calling addSlice:", payload.componentType);
+      addSlice(payload.componentType, payload.defaultProps);
     };
 
-    const onDragLeaveCapture = (e: DragEvent) => {
-      if (!el.contains(e.relatedTarget as Node)) {
-        setIsDragOver(false);
-      }
-    };
-
-    el.addEventListener("dragover", onDragOverCapture, true);
-    el.addEventListener("drop", onDropCapture, true);
-    el.addEventListener("dragleave", onDragLeaveCapture, true);
+    document.addEventListener("dragover", onDragOverCapture, true);
+    document.addEventListener("drop", onDropCapture, true);
     return () => {
-      el.removeEventListener("dragover", onDragOverCapture, true);
-      el.removeEventListener("drop", onDropCapture, true);
-      el.removeEventListener("dragleave", onDragLeaveCapture, true);
+      document.removeEventListener("dragover", onDragOverCapture, true);
+      document.removeEventListener("drop", onDropCapture, true);
     };
   }, [addSlice]);
 
   // ── Sync tree to iframe whenever it changes ────────────────────────
   useEffect(() => {
+    console.log("[DnD] SET_TREE syncing, nodes.length:", nodes.length);
     postToPreview(iframeRef.current, { type: "SET_TREE", payload: nodes });
   }, [nodes]);
 
@@ -178,10 +182,8 @@ export function EditorShell() {
           padding: 16,
         }}
       >
-        {/* Inner frame — gives the iframe a distinct border + shadow.
-            frameContainerRef is used by the capture-phase DnD listeners. */}
+        {/* Inner frame — gives the iframe a distinct border + shadow */}
         <div
-          ref={frameContainerRef}
           style={{
             position: "relative",
             width: "100%",
