@@ -10,6 +10,7 @@ import {
 
 export function EditorShell() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const frameContainerRef = useRef<HTMLDivElement>(null);
   const {
     nodes,
     selectedNodeId,
@@ -39,6 +40,51 @@ export function EditorShell() {
       document.removeEventListener("dragend", onDragEnd);
     };
   }, []);
+
+  // ── Capture-phase DnD listeners on the frame container ────────────────
+  // Registering in the capture phase (third arg = true) means these fire
+  // during the downward event propagation — before the event can reach the
+  // <iframe> element and be swallowed by the browser's iframe DnD handling.
+  // CSS pointer-events alone is not sufficient to intercept HTML5 DnD events
+  // from an iframe, so we rely on the capture phase here instead.
+  useEffect(() => {
+    const el = frameContainerRef.current;
+    if (!el) return;
+
+    const onDragOverCapture = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes("application/x-component")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      setIsDragOver(true);
+    };
+
+    const onDropCapture = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes("application/x-component")) return;
+      e.preventDefault();
+      e.stopPropagation(); // prevent the iframe from also receiving the drop
+      setIsDragOver(false);
+      setIsDragging(false);
+      const raw = e.dataTransfer.getData("application/x-component");
+      if (!raw) return;
+      const { componentType, defaultProps } = JSON.parse(raw);
+      addSlice(componentType, defaultProps);
+    };
+
+    const onDragLeaveCapture = (e: DragEvent) => {
+      if (!el.contains(e.relatedTarget as Node)) {
+        setIsDragOver(false);
+      }
+    };
+
+    el.addEventListener("dragover", onDragOverCapture, true);
+    el.addEventListener("drop", onDropCapture, true);
+    el.addEventListener("dragleave", onDragLeaveCapture, true);
+    return () => {
+      el.removeEventListener("dragover", onDragOverCapture, true);
+      el.removeEventListener("drop", onDropCapture, true);
+      el.removeEventListener("dragleave", onDragLeaveCapture, true);
+    };
+  }, [addSlice]);
 
   // ── Sync tree to iframe whenever it changes ────────────────────────
   useEffect(() => {
@@ -73,19 +119,9 @@ export function EditorShell() {
     });
   }, [selectNode, setTree]);
 
-  // ── Drop handlers (attached to the drag overlay, not the wrapper div) ─
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      const data = e.dataTransfer.getData("application/x-component");
-      if (!data) return;
-      const { componentType, defaultProps } = JSON.parse(data);
-      addSlice(componentType, defaultProps);
-    },
-    [addSlice],
-  );
-
+  // handleDragOver / handleDragLeave are kept on the overlay for the visual
+  // feedback ring; the actual drop is handled by the capture-phase listeners
+  // above so the iframe never swallows the event.
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
@@ -142,8 +178,10 @@ export function EditorShell() {
           padding: 16,
         }}
       >
-        {/* Inner frame — gives the iframe a distinct border + shadow */}
+        {/* Inner frame — gives the iframe a distinct border + shadow.
+            frameContainerRef is used by the capture-phase DnD listeners. */}
         <div
+          ref={frameContainerRef}
           style={{
             position: "relative",
             width: "100%",
@@ -179,7 +217,6 @@ export function EditorShell() {
               gap: 8,
               transition: "background-color 0.1s, border-color 0.1s",
             }}
-            onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
