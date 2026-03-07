@@ -22,7 +22,6 @@ interface Props {
  * - Apply button to send generated tree to iframes
  */
 export function GenerateTab({ postMessage }: Props) {
-  const { subscribers } = useHubStore();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [resultJson, setResultJson] = useState("");
   const [parsedResult, setParsedResult] = useState<ComponentTreeNode[] | null>(null);
@@ -30,8 +29,6 @@ export function GenerateTab({ postMessage }: Props) {
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const subscriberList = Array.from(subscribers.entries());
 
   // ── Image handling ─────────────────────────────────────────────────
   const handleFile = useCallback((file: File) => {
