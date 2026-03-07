@@ -65,6 +65,49 @@ The current proof-of-concept has a 3-window architecture: a custom CMS editor sh
 
 ## Implementation Phases
 
+### Phase 0 — Contentful Space Setup
+
+Before any code changes, the Contentful space needs to be created and configured. This is a one-time manual step done in the Contentful web UI.
+
+**0.1 — Create a Contentful account and space**
+- Sign up at contentful.com and create a new Space (free tier is sufficient for development)
+- Note the **Space ID** from Settings → General Settings
+
+**0.2 — Enable Contentful Studio / Experiences**
+- In the space, go to **Apps → Contentful Apps** and install **Contentful Studio** (also listed as "Experiences" in some plans)
+- This activates the Experience content type scaffolding and the visual editor UI
+
+**0.3 — Create the Experience content type**
+Contentful Studio auto-creates an `Experience` content type when the app is installed. Verify it exists under **Content model**. It should have at minimum:
+- `title` (Short text)
+- `slug` (Short text, unique) — used by `useFetchBySlug`
+- `componentTree` (JSON object) — managed internally by the Experiences SDK; do not edit manually
+
+**0.4 — Generate API keys**
+In Settings → API keys, create a key set and note:
+- **Space ID**
+- **Content Delivery API access token** (read-only, for `useFetchBySlug` in dev mode)
+- **Content Preview API access token** (for draft content in dev mode)
+
+Add these to `.env.local`:
+```
+VITE_CONTENTFUL_SPACE_ID=xxx
+VITE_CONTENTFUL_ENVIRONMENT=master
+VITE_CONTENTFUL_ACCESS_TOKEN=xxx
+VITE_CONTENTFUL_PREVIEW_TOKEN=xxx
+```
+
+**0.5 — Register the preview URL with Studio**
+In **Settings → Content preview**, create a preview configuration:
+- Content type: Experience
+- Preview URL: `https://<tunnel-or-deployed-url>/preview.html?slug={entry.fields.slug}`
+- For local dev: use `ngrok http 5173` to get a stable tunnel URL, then register `https://<ngrok-id>.ngrok.io/preview.html?slug={entry.fields.slug}`
+
+**0.6 — Create a test Experience entry**
+In **Content → Add entry → Experience**, create one entry with a slug (e.g., `home`). This will be used to verify the end-to-end flow once the preview app is wired up.
+
+---
+
 ### Phase 1 — Install Contentful Dependencies
 
 **`package.json`** additions:
@@ -132,13 +175,25 @@ The `ExperienceRoot` renders our registered components and handles Studio's post
 
 **Modified: `src/preview/HubLauncher.tsx`**
 
-Convert from click-triggered to **auto-launch on mount**:
+#### Studio detection
+
+Detect whether the preview is running inside Contentful Studio by checking for the Experiences SDK's `isInsideWithExperiencesSDK` flag or by inspecting the referrer/postMessage handshake. A simple reliable check:
+
+```ts
+const isInsideStudio = (): boolean =>
+  window.self !== window.top &&
+  document.referrer.includes("app.contentful.com");
+```
+
+For local dev with our custom editor shell (`index.html`), `document.referrer` will be `localhost`, so `isInsideStudio()` returns `false`.
+
+#### Dual behavior
 
 ```ts
 // Singleton window reference — module-level (survives re-renders)
 let hubWindowRef: Window | null = null;
 
-function getOrOpenHub(): void {
+export function getOrOpenHub(): void {
   if (hubWindowRef && !hubWindowRef.closed) {
     hubWindowRef.focus();   // reuse existing popup
     return;
@@ -146,20 +201,39 @@ function getOrOpenHub(): void {
   hubWindowRef = window.open("/hub.html", "cms-hub-popup", POPUP_FEATURES);
 }
 
-// In component:
-useEffect(() => {
-  getOrOpenHub();           // auto-launch on mount
-}, []);                     // runs once on preview load
+export function HubLauncher() {
+  const inStudio = isInsideStudio();
+
+  // Auto-launch when inside Studio (overlay blocks button clicks)
+  useEffect(() => {
+    if (inStudio) {
+      getOrOpenHub();
+    }
+  }, []);  // runs once on preview mount
+
+  // In our custom editor (local dev): render the clickable button as before
+  // Inside Studio: render nothing — Hub was already opened by useEffect
+  if (inStudio) return null;
+
+  return (
+    <button onClick={getOrOpenHub} /* ...existing styles... */>
+      Open Hub
+    </button>
+  );
+}
 ```
 
-Key behaviors:
-- **First load**: Hub popup opens automatically
-- **Studio overlay present**: No problem — popup is triggered by JS, not user click
-- **User navigates away and back in Studio**: `useEffect` fires again → `hubWindowRef` is checked → if still open, `.focus()` instead of reopening
-- **User closes Hub**: Next navigation into the experience preview auto-relaunches it
-- **Popup blocked**: Detect `null` return from `window.open()`, send `BROADCAST_CHANNEL` message so Hub can show instructions if it opens later
+Key behaviors by context:
 
-Export `getOrOpenHub()` for use in other components (e.g., a manual "Open Hub" button for standalone mode).
+| Context | Button visible | Hub launch trigger |
+|---------|---------------|-------------------|
+| Local dev (`index.html` editor) | Yes | User clicks button |
+| Inside Contentful Studio | No (returns `null`) | `useEffect` on mount |
+
+Additional behaviors:
+- **User navigates between entries in Studio**: `useEffect` fires on each new preview mount → `hubWindowRef` checked → if still open, `.focus()` instead of reopening
+- **User closes Hub**: Next preview mount auto-relaunches it
+- **Popup blocked**: Detect `null` return from `window.open()`, log a warning; in standalone mode show the existing "popup blocked" message UI
 
 ---
 
@@ -286,24 +360,6 @@ The `"cms-hub-popup"` window name (already in use) ensures the browser reuses th
 - `src/hooks/useBroadcastChannel.ts` — unchanged, used by ChannelBridge as before
 - `src/config/featureMap.ts` — source of truth for mapping to Contentful variables
 - `POPUP_FEATURES` constant from `HubLauncher.tsx` — same window dimensions
-
----
-
-## Environment Configuration
-
-Add to `.env.local` (for standalone dev mode):
-```
-VITE_CONTENTFUL_SPACE_ID=xxx
-VITE_CONTENTFUL_ENVIRONMENT=master
-VITE_CONTENTFUL_ACCESS_TOKEN=xxx        # Delivery API token
-VITE_CONTENTFUL_PREVIEW_TOKEN=xxx       # Preview API token
-VITE_CONTENTFUL_EXPERIENCE_TYPE_ID=xxx  # Content type ID for Experiences
-```
-
-Register `preview.html` URL with Contentful Studio:
-- Go to Space Settings → Environments → Content Preview
-- Point to `https://<your-domain>/preview.html?slug={entry.fields.slug}`
-- For local dev: use `ngrok` or similar tunnel for the preview URL
 
 ---
 
