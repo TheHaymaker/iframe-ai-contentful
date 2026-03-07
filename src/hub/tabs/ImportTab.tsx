@@ -10,7 +10,6 @@ interface Props {
 
 export function ImportTab({ postMessage }: Props) {
   const {
-    subscribers,
     importJson,
     setImportJson,
     importError,
@@ -20,8 +19,6 @@ export function ImportTab({ postMessage }: Props) {
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   const [mergeMode, setMergeMode] = useState<"append" | "replace">("append");
   const [sent, setSent] = useState(false);
-
-  const subscriberList = Array.from(subscribers.entries());
 
   const handleJsonChange = useCallback(
     (value: string) => {

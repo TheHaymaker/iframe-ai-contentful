@@ -40,7 +40,7 @@ interface HubState {
   setImportError: (error: string | null) => void;
 }
 
-export const useHubStore = create<HubState>((set) => ({
+export const useHubStore = create<HubState>((set, get) => ({
   activeTab: "export",
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -112,7 +112,7 @@ export const useHubStore = create<HubState>((set) => ({
     })),
   deselectAllTargets: () => set({ selectedTargets: new Set() }),
   getSelectedTargetIds: () => {
-    const state = useHubStore.getState();
+    const state = get();
     // If nothing explicitly selected, fall back to all subscribers
     if (state.selectedTargets.size === 0) {
       return Array.from(state.subscribers.keys());
