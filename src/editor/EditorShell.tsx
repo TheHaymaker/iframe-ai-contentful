@@ -180,14 +180,15 @@ export function EditorShell() {
           backgroundColor: "#e2e8f0",
           position: "relative",
           padding: 16,
+          display: "flex",
+          overflow: "hidden",
         }}
       >
         {/* Inner frame — gives the iframe a distinct border + shadow */}
         <div
           style={{
             position: "relative",
-            width: "100%",
-            height: "100%",
+            flex: 1,
             borderRadius: 8,
             border: "1px solid #cbd5e1",
             boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
