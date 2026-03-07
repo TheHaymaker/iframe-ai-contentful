@@ -1,0 +1,12 @@
+export const CHANNEL_NAME = "cms-hub";
+
+export const MESSAGE_TYPES = {
+  IFRAME_TREE_SNAPSHOT: "IFRAME_TREE_SNAPSHOT",
+  IMPORT_TREE: "IMPORT_TREE",
+  HUB_READY: "HUB_READY",
+  IFRAME_ANNOUNCE: "IFRAME_ANNOUNCE",
+  REQUEST_SNAPSHOT: "REQUEST_SNAPSHOT",
+  GENERATE_RESULT: "GENERATE_RESULT",
+} as const;
+
+export const generateSourceId = (): string => crypto.randomUUID();
