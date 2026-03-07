@@ -8,6 +8,7 @@ import {
 import { generateSourceId } from "../constants";
 import { HubLauncher } from "./HubLauncher";
 import { ChannelBridge } from "./ChannelBridge";
+import { cloneWithNewIds } from "../lib/treeUtils";
 import type { ComponentTreeNode } from "../types";
 
 /**
@@ -22,10 +23,13 @@ export function Preview() {
   // Stable unique id for this iframe instance (persists across re-renders)
   const sourceId = useMemo(() => generateSourceId(), []);
 
-  // Handler for trees imported via BroadcastChannel from the Hub
-  const handleImportTree = useCallback((imported: ComponentTreeNode[]) => {
-    setNodes((prev) => [...prev, ...imported]);
-    postToEditor({ type: "TREE_UPDATED", payload: imported });
+  // Handler for trees imported via BroadcastChannel from the Hub.
+  // Clone with new IDs so each target iframe gets unique node identifiers,
+  // preventing collisions when the same tree is broadcast to multiple iframes.
+  const handleImportTree = useCallback((imported: ComponentTreeNode[], replace?: boolean) => {
+    const cloned = cloneWithNewIds(imported);
+    setNodes((prev) => replace ? cloned : [...prev, ...cloned]);
+    postToEditor({ type: "TREE_UPDATED", payload: cloned });
   }, []);
 
   // Apply incoming editor messages to local state
