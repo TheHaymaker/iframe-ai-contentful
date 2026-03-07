@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from "react";
+import { flushSync } from "react-dom";
 import { useTreeStore } from "../store/treeStore";
 import { Sidebar } from "./Sidebar";
 import {
@@ -19,19 +20,18 @@ export function EditorShell() {
     reorderNode,
   } = useTreeStore();
 
-  // ── Track drag state so we can punch through the iframe ───────────
-  // Use direct DOM mutation (not React state) so pointer-events are disabled
-  // synchronously on dragstart — before the cursor can enter the iframe.
+  // ── Drag state ─────────────────────────────────────────────────────
+  // isDragging: controls whether the drop-capture overlay is in the DOM.
+  // We use flushSync so the overlay is committed synchronously on dragstart,
+  // before the cursor can reach the iframe. An iframe captures all HTML5 DnD
+  // events at the browser level regardless of CSS pointer-events; the only
+  // reliable fix is a parent-document element with z-index above the iframe.
+  const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
-    const onDragStart = () => {
-      if (iframeRef.current) iframeRef.current.style.pointerEvents = "none";
-    };
-    const onDragEnd = () => {
-      if (iframeRef.current) iframeRef.current.style.pointerEvents = "";
-      setIsDragOver(false);
-    };
+    const onDragStart = () => flushSync(() => setIsDragging(true));
+    const onDragEnd = () => { setIsDragging(false); setIsDragOver(false); };
     document.addEventListener("dragstart", onDragStart);
     document.addEventListener("dragend", onDragEnd);
     return () => {
@@ -73,7 +73,7 @@ export function EditorShell() {
     });
   }, [selectNode, setTree]);
 
-  // ── Drop handler for components dragged from palette onto iframe ──
+  // ── Drop handlers (attached to the drag overlay, not the wrapper div) ─
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -93,7 +93,6 @@ export function EditorShell() {
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear when leaving the preview area entirely (not entering a child)
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setIsDragOver(false);
     }
@@ -134,53 +133,74 @@ export function EditorShell() {
         />
       </div>
 
-      {/* iframe preview — pointer-events disabled on iframe during drag so the
-          wrapper div can receive dragover/drop events */}
+      {/* Preview area */}
       <div
         style={{
           flex: 1,
-          backgroundColor: "#f1f5f9",
+          backgroundColor: "#e2e8f0",
           position: "relative",
-          transition: "box-shadow 0.15s",
-          boxShadow: isDragOver ? "inset 0 0 0 3px #3b82f6" : "none",
+          padding: 16,
         }}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
       >
-        {/* Drop-zone overlay shown while dragging over the preview */}
-        {isDragOver && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "rgba(59, 130, 246, 0.08)",
-              border: "2px dashed #3b82f6",
-              zIndex: 10,
-              pointerEvents: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#3b82f6",
-              fontFamily: "system-ui",
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 24 }}>+</span> Drop to add component
-          </div>
-        )}
-        <iframe
-          ref={iframeRef}
-          src="/preview.html"
-          title="Preview"
+        {/* Inner frame — gives the iframe a distinct border + shadow */}
+        <div
           style={{
+            position: "relative",
             width: "100%",
             height: "100%",
-            border: "none",
+            borderRadius: 8,
+            border: "1px solid #cbd5e1",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+            overflow: "hidden",
+            backgroundColor: "#ffffff",
           }}
-        />
+        >
+          {/* Drop-capture overlay — only present during a drag.
+              Rendered synchronously via flushSync so it exists before the
+              cursor can reach the iframe. With zIndex: 10 it sits above the
+              iframe, ensuring DnD events fire in the parent document. */}
+          {isDragging && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 10,
+                borderRadius: 8,
+                backgroundColor: isDragOver ? "rgba(59, 130, 246, 0.08)" : "transparent",
+                border: isDragOver ? "2px dashed #3b82f6" : "2px dashed transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: 600,
+                color: "#3b82f6",
+                fontFamily: "system-ui",
+                gap: 8,
+                transition: "background-color 0.1s, border-color 0.1s",
+              }}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              {isDragOver && (
+                <>
+                  <span style={{ fontSize: 24 }}>+</span> Drop to add component
+                </>
+              )}
+            </div>
+          )}
+          <iframe
+            ref={iframeRef}
+            src="/preview.html"
+            title="Preview"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              display: "block",
+            }}
+          />
+        </div>
       </div>
     </div>
   );
