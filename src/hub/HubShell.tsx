@@ -48,9 +48,13 @@ export function HubShell() {
     onMessage: handleMessage,
   });
 
-  // Announce HUB_READY on mount
+  // Announce HUB_READY on mount + periodic heartbeat every 5s
   useEffect(() => {
     postMessage({ type: "HUB_READY", sourceId: hubSourceId });
+    const interval = setInterval(() => {
+      postMessage({ type: "HUB_HEARTBEAT", sourceId: hubSourceId });
+    }, 5000);
+    return () => clearInterval(interval);
   }, [postMessage]);
 
   const subscriberCount = subscribers.size;

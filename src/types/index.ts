@@ -73,4 +73,5 @@ export type HubMessage =
   | { type: "IFRAME_DISCONNECT"; sourceId: string }
   | { type: "REQUEST_SNAPSHOT"; sourceId: string; targetIds?: string[] }
   | { type: "GENERATE_RESULT"; payload: ComponentTreeNode[]; sourceId: string; targetIds?: string[] }
-  | { type: "BROADCAST_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds: string[] };
+  | { type: "BROADCAST_TREE"; payload: ComponentTreeNode[]; sourceId: string; targetIds: string[] }
+  | { type: "HUB_HEARTBEAT"; sourceId: string };
