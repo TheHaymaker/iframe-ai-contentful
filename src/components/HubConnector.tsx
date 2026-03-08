@@ -15,6 +15,9 @@ const MODULE_SOURCE_ID = generateSourceId();
 // Module-level hub window ref — survives add/remove/re-add of the component
 let hubWindow: Window | null = null;
 
+// ── Singleton guard: only one HubConnector instance per editor window ─
+let activeInstanceId: string | null = null;
+
 type LogChannel = "postMessage" | "broadcast";
 type LogDirection = "in" | "out";
 
@@ -27,24 +30,116 @@ interface LogEntry {
   data: unknown;
 }
 
+// Hub liveness: consider hub stale after 20s of no heartbeat
+const HUB_STALE_MS = 20_000;
+
 /**
  * Palette component that, when added to the canvas:
  *  - Auto-opens (or focuses) the Hub popup window
  *  - Registers this iframe with the Hub via BroadcastChannel
+ *  - Shows a status beacon with connection state and sourceId
  *  - Provides a live message discovery log for all postMessage and
  *    BroadcastChannel traffic (both directions)
+ *  - Enforces singleton: only one instance per editor window
  *
  * Remove this component to disconnect the iframe from the Hub.
  */
 export function HubConnector({ nodeId }: { nodeId?: string }) {
+  const [instanceId] = useState(() => crypto.randomUUID());
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const nodesRef = useRef<ComponentTreeNode[]>([]);
 
   const [hubStatus, setHubStatus] = useState<"open" | "closed" | "blocked">(() =>
     hubWindow && !hubWindow.closed ? "open" : "closed",
   );
+  const [hubConnected, setHubConnected] = useState(false);
+  const hubLastSeenRef = useRef<number>(0);
   const [showLog, setShowLog] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
 
+  // ── Singleton enforcement ───────────────────────────────────────────
+  useEffect(() => {
+    if (activeInstanceId !== null && activeInstanceId !== instanceId) {
+      console.warn(
+        `[HubConnector] Duplicate instance blocked (active: ${activeInstanceId.slice(0, 6)}, this: ${instanceId.slice(0, 6)}). Only one HubConnector per editor window is allowed.`,
+      );
+      setIsDuplicate(true);
+      return;
+    }
+    activeInstanceId = instanceId;
+    setIsDuplicate(false);
+    return () => {
+      if (activeInstanceId === instanceId) {
+        activeInstanceId = null;
+      }
+    };
+  }, [instanceId]);
+
+  // If this is a duplicate, render a warning badge and nothing else
+  if (isDuplicate) {
+    return (
+      <div
+        data-node-id={nodeId}
+        data-component="HubConnector"
+        style={{
+          padding: "8px 12px",
+          backgroundColor: "#fef2f2",
+          border: "1px solid #fecaca",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "#991b1b",
+          fontFamily: "system-ui",
+        }}
+      >
+        Duplicate HubConnector — only one is allowed per editor window. Remove this instance.
+      </div>
+    );
+  }
+
+  return (
+    <HubConnectorInner
+      nodeId={nodeId}
+      nodesRef={nodesRef}
+      hubStatus={hubStatus}
+      setHubStatus={setHubStatus}
+      hubConnected={hubConnected}
+      setHubConnected={setHubConnected}
+      hubLastSeenRef={hubLastSeenRef}
+      showLog={showLog}
+      setShowLog={setShowLog}
+      log={log}
+      setLog={setLog}
+    />
+  );
+}
+
+// Inner component that only renders when singleton check passes.
+// Separated to avoid hook ordering issues with the early return.
+function HubConnectorInner({
+  nodeId,
+  nodesRef,
+  hubStatus,
+  setHubStatus,
+  hubConnected,
+  setHubConnected,
+  hubLastSeenRef,
+  showLog,
+  setShowLog,
+  log,
+  setLog,
+}: {
+  nodeId?: string;
+  nodesRef: React.MutableRefObject<ComponentTreeNode[]>;
+  hubStatus: "open" | "closed" | "blocked";
+  setHubStatus: React.Dispatch<React.SetStateAction<"open" | "closed" | "blocked">>;
+  hubConnected: boolean;
+  setHubConnected: React.Dispatch<React.SetStateAction<boolean>>;
+  hubLastSeenRef: React.MutableRefObject<number>;
+  showLog: boolean;
+  setShowLog: React.Dispatch<React.SetStateAction<boolean>>;
+  log: LogEntry[];
+  setLog: React.Dispatch<React.SetStateAction<LogEntry[]>>;
+}) {
   const pushLog = useCallback(
     (channel: LogChannel, direction: LogDirection, msgType: string, data: unknown) => {
       setLog((prev) =>
@@ -54,12 +149,20 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
         ].slice(0, 100),
       );
     },
-    [],
+    [setLog],
   );
 
+  // ── Hub liveness check: poll every 5s ────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (hubLastSeenRef.current > 0 && Date.now() - hubLastSeenRef.current > HUB_STALE_MS) {
+        setHubConnected(false);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [hubLastSeenRef, setHubConnected]);
+
   // ── postMessage discovery: capture ALL raw window.message events ──────
-  // Logs every incoming message regardless of shape — useful for
-  // discovering unknown message types during integration testing.
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msgType =
@@ -75,7 +178,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [pushLog]);
+  }, [pushLog, nodesRef]);
 
   // ── buildMeta ─────────────────────────────────────────────────────────
   const buildMeta = useCallback(
@@ -86,7 +189,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
       componentCount: countNodes(nodesRef.current),
       timestamp: Date.now(),
     }),
-    [],
+    [nodesRef],
   );
 
   // ── Outbound postToEditor (logged) ────────────────────────────────────
@@ -104,15 +207,12 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
       const cloned = cloneWithNewIds(imported);
       const next = replace ? cloned : [...nodesRef.current, ...cloned];
       nodesRef.current = next;
-      // Round-trip: editor receives TREE_UPDATED → updates store → sends SET_TREE back
       sendToEditor({ type: "TREE_UPDATED", payload: next });
     },
-    [sendToEditor],
+    [sendToEditor, nodesRef],
   );
 
   // ── BroadcastChannel send (logged) ────────────────────────────────────
-  // broadcastPostRef breaks the circular dep:
-  //   handleHubMessage → sendToHub → postMessage (from useBroadcastChannel)
   const broadcastPostRef = useRef<(msg: HubMessage) => void>(() => {});
 
   const sendToHub = useCallback(
@@ -131,6 +231,19 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
       // Ignore messages targeted at other iframes
       if ("targetIds" in msg && msg.targetIds && !msg.targetIds.includes(MODULE_SOURCE_ID)) {
         return;
+      }
+
+      // Track hub liveness from any hub-originated message
+      if (
+        msg.type === "HUB_READY" ||
+        msg.type === "HUB_HEARTBEAT" ||
+        msg.type === "REQUEST_SNAPSHOT" ||
+        msg.type === "IMPORT_TREE" ||
+        msg.type === "BROADCAST_TREE" ||
+        msg.type === "GENERATE_RESULT"
+      ) {
+        hubLastSeenRef.current = Date.now();
+        setHubConnected(true);
       }
 
       switch (msg.type) {
@@ -164,7 +277,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
           break;
       }
     },
-    [pushLog, sendToHub, buildMeta, handleImportTree],
+    [pushLog, sendToHub, buildMeta, handleImportTree, hubLastSeenRef, setHubConnected, nodesRef],
   );
 
   const { postMessage } = useBroadcastChannel({
@@ -172,7 +285,6 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
     onMessage: handleHubMessage,
   });
 
-  // Keep ref current (postMessage is stable so this is effectively a one-time sync)
   broadcastPostRef.current = postMessage;
 
   // ── Heartbeat ─────────────────────────────────────────────────────────
@@ -209,7 +321,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
     }
     hubWindow = popup;
     setHubStatus("open");
-  }, []);
+  }, [setHubStatus]);
 
   // Auto-launch on mount + poll for popup close
   useEffect(() => {
@@ -218,10 +330,11 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
       if (hubWindow?.closed) {
         hubWindow = null;
         setHubStatus("closed");
+        // Hub window closed → mark connection stale after timeout
       }
     }, 1000);
     return () => clearInterval(poll);
-  }, [openOrFocusHub]);
+  }, [openOrFocusHub, setHubStatus]);
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -230,11 +343,26 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
       data-component="HubConnector"
       style={{ position: "fixed", bottom: 16, right: 16, zIndex: 10000, fontFamily: "system-ui" }}
     >
+      {/* Inject pulse animation */}
+      <style>{`
+        @keyframes hub-beacon-pulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+          50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+        }
+      `}</style>
+
       {showLog && (
         <MessageLog log={log} onClear={() => setLog([])} onClose={() => setShowLog(false)} />
       )}
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+        {/* ── Status Beacon ─────────────────────────────────────────── */}
+        <StatusBeacon
+          hubConnected={hubConnected}
+          hubStatus={hubStatus}
+          sourceId={MODULE_SOURCE_ID}
+        />
+
         <button
           type="button"
           onClick={() => setShowLog((v) => !v)}
@@ -290,6 +418,60 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
           Popup blocked. Allow popups for this site and click the button.
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Status Beacon ────────────────────────────────────────────────────────────
+
+function StatusBeacon({
+  hubConnected,
+  hubStatus,
+  sourceId,
+}: {
+  hubConnected: boolean;
+  hubStatus: "open" | "closed" | "blocked";
+  sourceId: string;
+}) {
+  const isLive = hubConnected && hubStatus === "open";
+  const dotColor = isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : "#94a3b8";
+  const label = isLive ? "Connected" : hubStatus === "blocked" ? "Blocked" : "Disconnected";
+
+  return (
+    <div
+      title={`Hub ${label} — Source ID: ${sourceId}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 10px",
+        backgroundColor: "#1e293b",
+        borderRadius: 20,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+      }}
+    >
+      {/* Pulsing beacon dot */}
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          backgroundColor: dotColor,
+          flexShrink: 0,
+          animation: isLive ? "hub-beacon-pulse 2s ease-in-out infinite" : "none",
+        }}
+      />
+      {/* Source ID */}
+      <span
+        style={{
+          fontSize: 10,
+          fontFamily: "monospace",
+          color: "#94a3b8",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {sourceId.slice(0, 8)}
+      </span>
     </div>
   );
 }

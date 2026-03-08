@@ -8,6 +8,7 @@ export const MESSAGE_TYPES = {
   REQUEST_SNAPSHOT: "REQUEST_SNAPSHOT",
   GENERATE_RESULT: "GENERATE_RESULT",
   BROADCAST_TREE: "BROADCAST_TREE",
+  HUB_HEARTBEAT: "HUB_HEARTBEAT",
 } as const;
 
 export const generateSourceId = (): string => crypto.randomUUID();
