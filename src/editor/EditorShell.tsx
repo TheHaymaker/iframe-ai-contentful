@@ -113,11 +113,9 @@ export function EditorShell() {
           selectNode(msg.nodeId);
           break;
         case "TREE_UPDATED":
-          // Hub imported new nodes into the iframe — sync to editor store
-          useTreeStore.getState().setTree([
-            ...useTreeStore.getState().nodes,
-            ...msg.payload,
-          ]);
+          // HubConnector already computed the full desired tree (merge/replace)
+          // — replace the store directly rather than appending again.
+          useTreeStore.getState().setTree(msg.payload);
           break;
       }
     });
