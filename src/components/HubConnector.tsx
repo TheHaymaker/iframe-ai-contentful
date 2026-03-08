@@ -407,33 +407,12 @@ function HubConnectorInner({
           </div>
         </div>
 
-        {/* Status pill */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "3px 8px",
-            backgroundColor: isLive ? "rgba(34,197,94,0.12)" : "rgba(100,116,139,0.15)",
-            border: `1px solid ${isLive ? "rgba(34,197,94,0.3)" : "rgba(100,116,139,0.3)"}`,
-            borderRadius: 20,
-            flexShrink: 0,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              backgroundColor: isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : "#64748b",
-              flexShrink: 0,
-              animation: isLive ? "hub-beacon-pulse 2s ease-in-out infinite" : "none",
-            }}
-          />
-          <span style={{ fontSize: 10, fontWeight: 600, color: isLive ? "#86efac" : "#94a3b8", letterSpacing: "0.04em" }}>
-            {isLive ? "LIVE" : hubStatus === "blocked" ? "BLOCKED" : "OFFLINE"}
-          </span>
-        </div>
+        {/* Status beacon */}
+        <StatusBeacon
+          hubConnected={hubConnected}
+          hubStatus={hubStatus}
+          sourceId={MODULE_SOURCE_ID}
+        />
 
         {/* Open/focus button */}
         <button
@@ -467,12 +446,6 @@ function HubConnectorInner({
         )}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-          <StatusBeacon
-            hubConnected={hubConnected}
-            hubStatus={hubStatus}
-            sourceId={MODULE_SOURCE_ID}
-          />
-
           <button
             type="button"
             onClick={() => setShowLog((v) => !v)}
