@@ -336,89 +336,200 @@ function HubConnectorInner({
     return () => clearInterval(poll);
   }, [openOrFocusHub, setHubStatus]);
 
+  const isLive = hubConnected && hubStatus === "open";
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div
-      data-node-id={nodeId}
-      data-component="HubConnector"
-      style={{ position: "fixed", bottom: 16, right: 16, zIndex: 10000, fontFamily: "system-ui" }}
-    >
-      {/* Inject pulse animation */}
+    <>
+      {/* Inject pulse animation (once, shared by both inline and overlay) */}
       <style>{`
         @keyframes hub-beacon-pulse {
           0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
           50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
         }
+        @keyframes hub-connector-scan {
+          0% { transform: translateY(-100%); opacity: 0.18; }
+          100% { transform: translateY(100%); opacity: 0; }
+        }
       `}</style>
 
-      {showLog && (
-        <MessageLog log={log} onClear={() => setLog([])} onClose={() => setShowLog(false)} />
-      )}
+      {/* ── Inline canvas placeholder ──────────────────────────────────
+          Sits at the component's actual position in the tree so the
+          editor selection ring and tree outline align correctly.        */}
+      <div
+        data-node-id={nodeId}
+        data-component="HubConnector"
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 16px",
+          margin: "4px 0",
+          background: isLive
+            ? "linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)"
+            : "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+          border: `1px solid ${isLive ? "#4f46e5" : "#334155"}`,
+          borderLeft: `3px solid ${isLive ? "#6366f1" : "#475569"}`,
+          borderRadius: 6,
+          fontFamily: "system-ui",
+          overflow: "hidden",
+          boxShadow: isLive
+            ? "0 0 0 1px rgba(99,102,241,0.2), 0 2px 8px rgba(0,0,0,0.3)"
+            : "0 2px 4px rgba(0,0,0,0.2)",
+        }}
+      >
+        {/* Animated scan line (visible only when live) */}
+        {isLive && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(180deg, transparent 0%, rgba(99,102,241,0.12) 50%, transparent 100%)",
+              animation: "hub-connector-scan 3s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+        )}
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-        {/* ── Status Beacon ─────────────────────────────────────────── */}
-        <StatusBeacon
-          hubConnected={hubConnected}
-          hubStatus={hubStatus}
-          sourceId={MODULE_SOURCE_ID}
-        />
+        {/* Icon */}
+        <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
+          {isLive ? "⬡" : "⬢"}
+        </span>
 
-        <button
-          type="button"
-          onClick={() => setShowLog((v) => !v)}
-          title="Toggle message discovery log"
+        {/* Label + ID */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#e2e8f0", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Hub Connector
+          </div>
+          <div style={{ fontSize: 10, color: "#64748b", fontFamily: "monospace", marginTop: 1 }}>
+            id: {MODULE_SOURCE_ID.slice(0, 8)}
+          </div>
+        </div>
+
+        {/* Status pill */}
+        <div
           style={{
-            padding: "6px 10px",
-            backgroundColor: showLog ? "#6366f1" : "#475569",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "3px 8px",
+            backgroundColor: isLive ? "rgba(34,197,94,0.12)" : "rgba(100,116,139,0.15)",
+            border: `1px solid ${isLive ? "rgba(34,197,94,0.3)" : "rgba(100,116,139,0.3)"}`,
+            borderRadius: 20,
+            flexShrink: 0,
           }}
         >
-          {showLog ? "Hide Log" : "Log"}{log.length > 0 ? ` (${log.length})` : ""}
-        </button>
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              backgroundColor: isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : "#64748b",
+              flexShrink: 0,
+              animation: isLive ? "hub-beacon-pulse 2s ease-in-out infinite" : "none",
+            }}
+          />
+          <span style={{ fontSize: 10, fontWeight: 600, color: isLive ? "#86efac" : "#94a3b8", letterSpacing: "0.04em" }}>
+            {isLive ? "LIVE" : hubStatus === "blocked" ? "BLOCKED" : "OFFLINE"}
+          </span>
+        </div>
 
+        {/* Open/focus button */}
         <button
           type="button"
           onClick={openOrFocusHub}
+          title={hubStatus === "open" ? "Focus hub window" : "Open hub"}
           style={{
-            padding: "10px 20px",
-            backgroundColor:
-              hubStatus === "open" ? "#16a34a" : hubStatus === "blocked" ? "#dc2626" : "#3b82f6",
+            padding: "4px 10px",
+            backgroundColor: isLive ? "#4f46e5" : hubStatus === "blocked" ? "#dc2626" : "#3b82f6",
             color: "#fff",
             border: "none",
-            borderRadius: 8,
-            fontSize: 14,
+            borderRadius: 4,
+            fontSize: 11,
             fontWeight: 600,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            flexShrink: 0,
           }}
         >
-          {hubStatus === "open" ? "Hub Open" : hubStatus === "blocked" ? "Popup Blocked" : "Open Hub"}
+          {hubStatus === "open" ? "Focus" : hubStatus === "blocked" ? "Blocked" : "Open"}
         </button>
       </div>
 
-      {hubStatus === "blocked" && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: "8px 12px",
-            backgroundColor: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: 6,
-            fontSize: 12,
-            color: "#991b1b",
-            maxWidth: 260,
-          }}
-        >
-          Popup blocked. Allow popups for this site and click the button.
+      {/* ── Fixed overlay (log panel + controls) ──────────────────────
+          Floats above the canvas for the message log; no data-node-id
+          so it doesn't interfere with the editor selection ring.       */}
+      <div
+        style={{ position: "fixed", bottom: 16, right: 16, zIndex: 10000, fontFamily: "system-ui" }}
+      >
+        {showLog && (
+          <MessageLog log={log} onClear={() => setLog([])} onClose={() => setShowLog(false)} />
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+          <StatusBeacon
+            hubConnected={hubConnected}
+            hubStatus={hubStatus}
+            sourceId={MODULE_SOURCE_ID}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowLog((v) => !v)}
+            title="Toggle message discovery log"
+            style={{
+              padding: "6px 10px",
+              backgroundColor: showLog ? "#6366f1" : "#475569",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}
+          >
+            {showLog ? "Hide Log" : "Log"}{log.length > 0 ? ` (${log.length})` : ""}
+          </button>
+
+          <button
+            type="button"
+            onClick={openOrFocusHub}
+            style={{
+              padding: "10px 20px",
+              backgroundColor:
+                hubStatus === "open" ? "#16a34a" : hubStatus === "blocked" ? "#dc2626" : "#3b82f6",
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}
+          >
+            {hubStatus === "open" ? "Hub Open" : hubStatus === "blocked" ? "Popup Blocked" : "Open Hub"}
+          </button>
         </div>
-      )}
-    </div>
+
+        {hubStatus === "blocked" && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              backgroundColor: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: 6,
+              fontSize: 12,
+              color: "#991b1b",
+              maxWidth: 260,
+            }}
+          >
+            Popup blocked. Allow popups for this site and click the button.
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
