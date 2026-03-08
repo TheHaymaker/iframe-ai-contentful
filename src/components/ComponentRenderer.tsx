@@ -6,6 +6,7 @@ import { Hero } from "./Hero";
 import { TextBlock } from "./TextBlock";
 import { ImageCard } from "./ImageCard";
 import { Button } from "./Button";
+import { HubConnector } from "./HubConnector";
 
 /**
  * Map of component type keys → React components.
@@ -20,6 +21,7 @@ const COMPONENT_MAP: Record<string, ComponentType<any>> = {
   TextBlock,
   ImageCard,
   Button,
+  HubConnector,
 };
 
 interface Props {

@@ -233,6 +233,15 @@ export const featureMap: FeatureMapEntry[] = [
       },
     },
   },
+
+  // ── Utility / integration ───────────────────────────────────────────
+  {
+    componentType: "HubConnector",
+    description:
+      "Registers this iframe with the Hub for import, export, and AI generation. Auto-opens the Hub window when added; focuses the existing window if already open. Remove to disconnect from the Hub.",
+    isContainer: false,
+    propSchema: {},
+  },
 ];
 
 /** Lookup a feature map entry by component type */

@@ -1,14 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ComponentRenderer } from "../components";
 import {
   listenInPreview,
   postToEditor,
   type EditorMessage,
 } from "../lib/postMessageBridge";
-import { generateSourceId } from "../constants";
-import { HubLauncher } from "./HubLauncher";
-import { ChannelBridge } from "./ChannelBridge";
-import { cloneWithNewIds } from "../lib/treeUtils";
 import type { ComponentTreeNode } from "../types";
 
 /**
@@ -19,18 +15,6 @@ import type { ComponentTreeNode } from "../types";
 export function Preview() {
   const [nodes, setNodes] = useState<ComponentTreeNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Stable unique id for this iframe instance (persists across re-renders)
-  const sourceId = useMemo(() => generateSourceId(), []);
-
-  // Handler for trees imported via BroadcastChannel from the Hub.
-  // Clone with new IDs so each target iframe gets unique node identifiers,
-  // preventing collisions when the same tree is broadcast to multiple iframes.
-  const handleImportTree = useCallback((imported: ComponentTreeNode[], replace?: boolean) => {
-    const cloned = cloneWithNewIds(imported);
-    setNodes((prev) => replace ? cloned : [...prev, ...cloned]);
-    postToEditor({ type: "TREE_UPDATED", payload: cloned });
-  }, []);
 
   // Apply incoming editor messages to local state
   const handleMessage = useCallback((msg: EditorMessage) => {
@@ -84,10 +68,6 @@ export function Preview() {
       onClick={handleClick}
       style={{ minHeight: "100vh", position: "relative" }}
     >
-      {/* BroadcastChannel bridge to Hub popup */}
-      <ChannelBridge nodes={nodes} sourceId={sourceId} onImportTree={handleImportTree} />
-      {/* Hub launcher button */}
-      <HubLauncher />
       {/* Selection highlight overlay */}
       {selectedId && <SelectionOverlay nodeId={selectedId} />}
       <ComponentRenderer nodes={nodes} />
