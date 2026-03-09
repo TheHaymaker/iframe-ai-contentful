@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useBroadcastChannel } from "../hooks/useBroadcastChannel";
 import { CHANNEL_NAME, generateSourceId } from "../constants";
 import { useHubStore, type HubTab } from "./store";
@@ -26,6 +26,8 @@ export function HubShell() {
     removeSubscriber,
   } = useHubStore();
 
+  const postMessageRef = useRef<(msg: HubMessage) => void>(() => {});
+
   const handleMessage = useCallback(
     (msg: HubMessage) => {
       switch (msg.type) {
@@ -38,6 +40,9 @@ export function HubShell() {
         case "IFRAME_DISCONNECT":
           removeSubscriber(msg.sourceId);
           break;
+        case "HUB_PING":
+          postMessageRef.current({ type: "HUB_ALIVE", sourceId: hubSourceId });
+          break;
       }
     },
     [upsertSubscriber, setSubscriberTree, removeSubscriber],
@@ -47,6 +52,8 @@ export function HubShell() {
     channelName: CHANNEL_NAME,
     onMessage: handleMessage,
   });
+
+  postMessageRef.current = postMessage;
 
   // Announce HUB_READY on mount + periodic heartbeat every 5s
   useEffect(() => {

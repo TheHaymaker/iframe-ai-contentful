@@ -49,7 +49,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
   const [isDuplicate, setIsDuplicate] = useState(false);
   const nodesRef = useRef<ComponentTreeNode[]>([]);
 
-  const [hubStatus, setHubStatus] = useState<"open" | "closed" | "blocked">(() =>
+  const [hubStatus, setHubStatus] = useState<"open" | "closed" | "blocked" | "checking">(() =>
     hubWindow && !hubWindow.closed ? "open" : "closed",
   );
   const [hubConnected, setHubConnected] = useState(false);
@@ -130,8 +130,8 @@ function HubConnectorInner({
 }: {
   nodeId?: string;
   nodesRef: React.MutableRefObject<ComponentTreeNode[]>;
-  hubStatus: "open" | "closed" | "blocked";
-  setHubStatus: React.Dispatch<React.SetStateAction<"open" | "closed" | "blocked">>;
+  hubStatus: "open" | "closed" | "blocked" | "checking";
+  setHubStatus: React.Dispatch<React.SetStateAction<"open" | "closed" | "blocked" | "checking">>;
   hubConnected: boolean;
   setHubConnected: React.Dispatch<React.SetStateAction<boolean>>;
   hubLastSeenRef: React.MutableRefObject<number>;
@@ -237,6 +237,7 @@ function HubConnectorInner({
       if (
         msg.type === "HUB_READY" ||
         msg.type === "HUB_HEARTBEAT" ||
+        msg.type === "HUB_ALIVE" ||
         msg.type === "REQUEST_SNAPSHOT" ||
         msg.type === "IMPORT_TREE" ||
         msg.type === "BROADCAST_TREE" ||
@@ -308,33 +309,63 @@ function HubConnectorInner({
   }, [sendToHub]);
 
   // ── Hub window management ─────────────────────────────────────────────
-  const openOrFocusHub = useCallback(() => {
+  const ensureHubOpen = useCallback(() => {
+    // Fast path: ref still valid
     if (hubWindow && !hubWindow.closed) {
       hubWindow.focus();
       return;
     }
-    const popup = window.open("/hub.html", "cms-hub-popup", POPUP_FEATURES);
-    if (!popup || popup.closed) {
-      setHubStatus("blocked");
-      hubWindow = null;
-      return;
-    }
-    hubWindow = popup;
-    setHubStatus("open");
+
+    setHubStatus("checking");
+
+    // Ping via a one-shot BroadcastChannel listener (200ms window)
+    const ch = new BroadcastChannel(CHANNEL_NAME);
+    let found = false;
+
+    ch.onmessage = (e: MessageEvent<HubMessage>) => {
+      if (e.data.type === "HUB_ALIVE") found = true;
+    };
+    ch.postMessage({ type: "HUB_PING", sourceId: MODULE_SOURCE_ID });
+
+    setTimeout(() => {
+      ch.close();
+
+      if (found) {
+        // Hub is alive — reattach ref via named-window probe (won't navigate)
+        const existing = window.open("", "cms-hub-popup");
+        if (existing && !existing.closed) {
+          hubWindow = existing;
+          existing.focus();
+          setHubStatus("open");
+        } else {
+          setHubStatus("closed");
+        }
+        return;
+      }
+
+      // No ping response — open for real
+      const popup = window.open("/hub.html", "cms-hub-popup", POPUP_FEATURES);
+      if (!popup || popup.closed) {
+        setHubStatus("blocked");
+        hubWindow = null;
+        return;
+      }
+      hubWindow = popup;
+      setHubStatus("open");
+    }, 200);
   }, [setHubStatus]);
 
   // Auto-launch on mount + poll for popup close
   useEffect(() => {
-    openOrFocusHub();
+    ensureHubOpen();
     const poll = setInterval(() => {
       if (hubWindow?.closed) {
         hubWindow = null;
         setHubStatus("closed");
-        // Hub window closed → mark connection stale after timeout
       }
     }, 1000);
     return () => clearInterval(poll);
-  }, [openOrFocusHub, setHubStatus]);
+  }, [ensureHubOpen, setHubStatus]);
 
   const isLive = hubConnected && hubStatus === "open";
 
@@ -417,11 +448,11 @@ function HubConnectorInner({
         {/* Open/focus button */}
         <button
           type="button"
-          onClick={openOrFocusHub}
-          title={hubStatus === "open" ? "Focus hub window" : "Open hub"}
+          onClick={ensureHubOpen}
+          title={hubStatus === "open" ? "Focus hub window" : hubStatus === "checking" ? "Checking for hub…" : "Open hub"}
           style={{
             padding: "4px 10px",
-            backgroundColor: isLive ? "#4f46e5" : hubStatus === "blocked" ? "#dc2626" : "#3b82f6",
+            backgroundColor: isLive ? "#4f46e5" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
             color: "#fff",
             border: "none",
             borderRadius: 4,
@@ -431,7 +462,7 @@ function HubConnectorInner({
             flexShrink: 0,
           }}
         >
-          {hubStatus === "open" ? "Focus" : hubStatus === "blocked" ? "Blocked" : "Open"}
+          {hubStatus === "open" ? "Focus" : hubStatus === "blocked" ? "Blocked" : hubStatus === "checking" ? "Checking…" : "Open"}
         </button>
       </div>
 
@@ -467,11 +498,11 @@ function HubConnectorInner({
 
           <button
             type="button"
-            onClick={openOrFocusHub}
+            onClick={ensureHubOpen}
             style={{
               padding: "10px 20px",
               backgroundColor:
-                hubStatus === "open" ? "#16a34a" : hubStatus === "blocked" ? "#dc2626" : "#3b82f6",
+                hubStatus === "open" ? "#16a34a" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
               color: "#fff",
               border: "none",
               borderRadius: 8,
@@ -481,7 +512,7 @@ function HubConnectorInner({
               boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
             }}
           >
-            {hubStatus === "open" ? "Hub Open" : hubStatus === "blocked" ? "Popup Blocked" : "Open Hub"}
+            {hubStatus === "open" ? "Hub Open" : hubStatus === "blocked" ? "Popup Blocked" : hubStatus === "checking" ? "Checking…" : "Open Hub"}
           </button>
         </div>
 
@@ -514,12 +545,12 @@ function StatusBeacon({
   sourceId,
 }: {
   hubConnected: boolean;
-  hubStatus: "open" | "closed" | "blocked";
+  hubStatus: "open" | "closed" | "blocked" | "checking";
   sourceId: string;
 }) {
   const isLive = hubConnected && hubStatus === "open";
-  const dotColor = isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : "#94a3b8";
-  const label = isLive ? "Connected" : hubStatus === "blocked" ? "Blocked" : "Disconnected";
+  const dotColor = isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : hubStatus === "checking" ? "#f59e0b" : "#94a3b8";
+  const label = isLive ? "Connected" : hubStatus === "blocked" ? "Blocked" : hubStatus === "checking" ? "Checking" : "Disconnected";
 
   return (
     <div

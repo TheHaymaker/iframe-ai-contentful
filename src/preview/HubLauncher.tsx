@@ -1,4 +1,6 @@
 import { useRef, useState, useCallback } from "react";
+import { CHANNEL_NAME } from "../constants";
+import type { HubMessage } from "../types";
 
 interface Props {
   /** Called when the popup is successfully opened */
@@ -9,50 +11,78 @@ const POPUP_FEATURES = "width=600,height=700,menubar=no,toolbar=no,status=no,res
 
 /**
  * Button rendered inside the iframe preview that opens the Hub popup
- * via `window.open()`. Tracks popup lifecycle and handles blocked popups.
+ * via `window.open()`. Pings the BroadcastChannel first to detect an
+ * already-open hub before launching a new one.
  */
 export function HubLauncher({ onPopupOpened }: Props) {
   const popupRef = useRef<Window | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [blocked, setBlocked] = useState(false);
+  const [status, setStatus] = useState<"idle" | "checking" | "open" | "blocked">("idle");
 
-  const openHub = useCallback(() => {
-    // If already open, focus the existing popup
+  const ensureHubOpen = useCallback(() => {
+    // Fast path: ref still valid
     if (popupRef.current && !popupRef.current.closed) {
       popupRef.current.focus();
       return;
     }
 
-    const popup = window.open("/hub.html", "cms-hub-popup", POPUP_FEATURES);
+    setStatus("checking");
 
-    if (!popup || popup.closed) {
-      setBlocked(true);
-      return;
-    }
+    // Ping via a one-shot BroadcastChannel listener (200ms window)
+    const ch = new BroadcastChannel(CHANNEL_NAME);
+    let found = false;
 
-    popupRef.current = popup;
-    setIsOpen(true);
-    setBlocked(false);
-    onPopupOpened?.();
+    ch.onmessage = (e: MessageEvent<HubMessage>) => {
+      if (e.data.type === "HUB_ALIVE") found = true;
+    };
+    ch.postMessage({ type: "HUB_PING", sourceId: "hub-launcher" });
 
-    // Poll for popup close (no reliable event for cross-origin popups)
-    const interval = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(interval);
-        popupRef.current = null;
-        setIsOpen(false);
+    setTimeout(() => {
+      ch.close();
+
+      if (found) {
+        // Hub is alive — reattach ref via named-window probe (won't navigate)
+        const existing = window.open("", "cms-hub-popup");
+        if (existing && !existing.closed) {
+          popupRef.current = existing;
+          existing.focus();
+          setStatus("open");
+          onPopupOpened?.();
+        } else {
+          setStatus("idle");
+        }
+        return;
       }
-    }, 1000);
+
+      // No ping response — open for real
+      const popup = window.open("/hub.html", "cms-hub-popup", POPUP_FEATURES);
+      if (!popup || popup.closed) {
+        setStatus("blocked");
+        return;
+      }
+
+      popupRef.current = popup;
+      setStatus("open");
+      onPopupOpened?.();
+
+      // Poll for popup close (no reliable event for cross-origin popups)
+      const interval = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(interval);
+          popupRef.current = null;
+          setStatus("idle");
+        }
+      }, 1000);
+    }, 200);
   }, [onPopupOpened]);
 
   return (
     <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 10000 }}>
       <button
         type="button"
-        onClick={openHub}
+        onClick={ensureHubOpen}
         style={{
           padding: "10px 20px",
-          backgroundColor: isOpen ? "#16a34a" : "#3b82f6",
+          backgroundColor: status === "open" ? "#16a34a" : status === "checking" ? "#f59e0b" : "#3b82f6",
           color: "#fff",
           border: "none",
           borderRadius: 8,
@@ -63,9 +93,9 @@ export function HubLauncher({ onPopupOpened }: Props) {
           fontFamily: "system-ui",
         }}
       >
-        {isOpen ? "Hub Open" : "Open Hub"}
+        {status === "open" ? "Hub Open" : status === "checking" ? "Checking…" : "Open Hub"}
       </button>
-      {blocked && (
+      {status === "blocked" && (
         <div
           style={{
             marginTop: 8,
