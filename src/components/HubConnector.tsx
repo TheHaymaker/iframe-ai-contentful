@@ -49,7 +49,7 @@ export function HubConnector({ nodeId }: { nodeId?: string }) {
   const [isDuplicate, setIsDuplicate] = useState(false);
   const nodesRef = useRef<ComponentTreeNode[]>([]);
 
-  const [hubStatus, setHubStatus] = useState<"open" | "closed" | "blocked" | "checking">(() =>
+  const [hubStatus, setHubStatus] = useState<"open" | "alive" | "closed" | "blocked" | "checking">(() =>
     hubWindow && !hubWindow.closed ? "open" : "closed",
   );
   const [hubConnected, setHubConnected] = useState(false);
@@ -130,8 +130,8 @@ function HubConnectorInner({
 }: {
   nodeId?: string;
   nodesRef: React.MutableRefObject<ComponentTreeNode[]>;
-  hubStatus: "open" | "closed" | "blocked" | "checking";
-  setHubStatus: React.Dispatch<React.SetStateAction<"open" | "closed" | "blocked" | "checking">>;
+  hubStatus: "open" | "alive" | "closed" | "blocked" | "checking";
+  setHubStatus: React.Dispatch<React.SetStateAction<"open" | "alive" | "closed" | "blocked" | "checking">>;
   hubConnected: boolean;
   setHubConnected: React.Dispatch<React.SetStateAction<boolean>>;
   hubLastSeenRef: React.MutableRefObject<number>;
@@ -334,7 +334,8 @@ function HubConnectorInner({
         // Hub is alive — BroadcastChannel confirmed it; skip window.open probe
         // (calling window.open("","cms-hub-popup") opens an about:blank window
         // when the named window isn't reachable from the current context)
-        setHubStatus("open");
+        // We don't have a window ref, so we can't focus — use "alive" status
+        setHubStatus("alive");
         return;
       }
 
@@ -362,7 +363,7 @@ function HubConnectorInner({
     return () => clearInterval(poll);
   }, [ensureHubOpen, setHubStatus]);
 
-  const isLive = hubConnected && hubStatus === "open";
+  const isLive = hubConnected && (hubStatus === "open" || hubStatus === "alive");
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -444,20 +445,22 @@ function HubConnectorInner({
         <button
           type="button"
           onClick={ensureHubOpen}
-          title={hubStatus === "open" ? "Focus hub window" : hubStatus === "checking" ? "Checking for hub…" : "Open hub"}
+          disabled={hubStatus === "alive"}
+          title={hubStatus === "open" ? "Focus hub window" : hubStatus === "alive" ? "Hub is running in another window" : hubStatus === "checking" ? "Checking for hub…" : "Open hub"}
           style={{
             padding: "4px 10px",
-            backgroundColor: isLive ? "#4f46e5" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
+            backgroundColor: hubStatus === "alive" ? "#0d9488" : isLive ? "#4f46e5" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
             color: "#fff",
             border: "none",
             borderRadius: 4,
             fontSize: 11,
             fontWeight: 600,
-            cursor: "pointer",
+            cursor: hubStatus === "alive" ? "default" : "pointer",
             flexShrink: 0,
+            opacity: hubStatus === "alive" ? 0.8 : 1,
           }}
         >
-          {hubStatus === "open" ? "Focus" : hubStatus === "blocked" ? "Blocked" : hubStatus === "checking" ? "Checking…" : "Open"}
+          {hubStatus === "open" ? "Focus" : hubStatus === "alive" ? "Connected" : hubStatus === "blocked" ? "Blocked" : hubStatus === "checking" ? "Checking…" : "Open"}
         </button>
       </div>
 
@@ -494,20 +497,23 @@ function HubConnectorInner({
           <button
             type="button"
             onClick={ensureHubOpen}
+            disabled={hubStatus === "alive"}
+            title={hubStatus === "alive" ? "Hub is running in another window" : undefined}
             style={{
               padding: "10px 20px",
               backgroundColor:
-                hubStatus === "open" ? "#16a34a" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
+                hubStatus === "open" ? "#16a34a" : hubStatus === "alive" ? "#0d9488" : hubStatus === "blocked" ? "#dc2626" : hubStatus === "checking" ? "#f59e0b" : "#3b82f6",
               color: "#fff",
               border: "none",
               borderRadius: 8,
               fontSize: 14,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: hubStatus === "alive" ? "default" : "pointer",
               boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              opacity: hubStatus === "alive" ? 0.8 : 1,
             }}
           >
-            {hubStatus === "open" ? "Hub Open" : hubStatus === "blocked" ? "Popup Blocked" : hubStatus === "checking" ? "Checking…" : "Open Hub"}
+            {hubStatus === "open" ? "Hub Open" : hubStatus === "alive" ? "Hub Connected" : hubStatus === "blocked" ? "Popup Blocked" : hubStatus === "checking" ? "Checking…" : "Open Hub"}
           </button>
         </div>
 
@@ -540,10 +546,10 @@ function StatusBeacon({
   sourceId,
 }: {
   hubConnected: boolean;
-  hubStatus: "open" | "closed" | "blocked" | "checking";
+  hubStatus: "open" | "alive" | "closed" | "blocked" | "checking";
   sourceId: string;
 }) {
-  const isLive = hubConnected && hubStatus === "open";
+  const isLive = hubConnected && (hubStatus === "open" || hubStatus === "alive");
   const dotColor = isLive ? "#22c55e" : hubStatus === "blocked" ? "#ef4444" : hubStatus === "checking" ? "#f59e0b" : "#94a3b8";
   const label = isLive ? "Connected" : hubStatus === "blocked" ? "Blocked" : hubStatus === "checking" ? "Checking" : "Disconnected";
 
