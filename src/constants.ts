@@ -9,6 +9,8 @@ export const MESSAGE_TYPES = {
   GENERATE_RESULT: "GENERATE_RESULT",
   BROADCAST_TREE: "BROADCAST_TREE",
   HUB_HEARTBEAT: "HUB_HEARTBEAT",
+  HUB_PING: "HUB_PING",
+  HUB_ALIVE: "HUB_ALIVE",
 } as const;
 
 export const generateSourceId = (): string => crypto.randomUUID();
