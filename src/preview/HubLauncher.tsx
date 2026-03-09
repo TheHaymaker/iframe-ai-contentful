@@ -40,16 +40,11 @@ export function HubLauncher({ onPopupOpened }: Props) {
       ch.close();
 
       if (found) {
-        // Hub is alive — reattach ref via named-window probe (won't navigate)
-        const existing = window.open("", "cms-hub-popup");
-        if (existing && !existing.closed) {
-          popupRef.current = existing;
-          existing.focus();
-          setStatus("open");
-          onPopupOpened?.();
-        } else {
-          setStatus("idle");
-        }
+        // Hub is alive — BroadcastChannel confirmed it; skip window.open probe
+        // (calling window.open("","cms-hub-popup") opens an about:blank window
+        // when the named window isn't reachable from the current context)
+        setStatus("open");
+        onPopupOpened?.();
         return;
       }
 
