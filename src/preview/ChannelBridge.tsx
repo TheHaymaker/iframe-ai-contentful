@@ -9,9 +9,8 @@ interface Props {
   nodes: ComponentTreeNode[];
   /** Unique identifier for this iframe instance */
   sourceId: string;
-  /** Called when the Hub sends an IMPORT_TREE or BROADCAST_TREE.
-   *  `replace` is true when the incoming message specifies mergeMode "replace". */
-  onImportTree: (nodes: ComponentTreeNode[], replace?: boolean) => void;
+  /** Called when the Hub sends an IMPORT_TREE or BROADCAST_TREE. Always appends. */
+  onImportTree: (nodes: ComponentTreeNode[]) => void;
 }
 
 /**
@@ -66,7 +65,7 @@ export function ChannelBridge({ nodes, sourceId, onImportTree }: Props) {
           break;
 
         case "IMPORT_TREE":
-          onImportTree(msg.payload, msg.mergeMode === "replace");
+          onImportTree(msg.payload);
           break;
 
         case "BROADCAST_TREE":
