@@ -298,17 +298,6 @@ function HubConnectorInner({
     return () => clearInterval(interval);
   }, [sendToHub, buildMeta]);
 
-  // ── Re-announce when tab becomes visible (counteracts background throttling) ──
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        sendToHub({ type: "IFRAME_ANNOUNCE", sourceId: MODULE_SOURCE_ID, meta: buildMeta() });
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [sendToHub, buildMeta]);
-
   // ── Disconnect on unmount / page close ────────────────────────────────
   useEffect(() => {
     const onUnload = () => sendToHub({ type: "IFRAME_DISCONNECT", sourceId: MODULE_SOURCE_ID });

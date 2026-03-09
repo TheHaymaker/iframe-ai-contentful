@@ -96,27 +96,12 @@ export const useHubStore = create<HubState>((set, get) => ({
     set((state) => {
       const now = Date.now();
       const next = new Map(state.subscribers);
-      const staleIds: string[] = [];
       for (const [id, entry] of next) {
         if (now - entry.lastSeen > maxAge) {
           next.delete(id);
-          staleIds.push(id);
         }
       }
-      if (staleIds.length === 0) return state;
-      const targets = new Set(state.selectedTargets);
-      for (const id of staleIds) {
-        targets.delete(id);
-      }
-      const selectedSourceId =
-        state.selectedSourceId && staleIds.includes(state.selectedSourceId)
-          ? null
-          : state.selectedSourceId;
-      const selectedNodePath =
-        selectedSourceId === null && state.selectedSourceId !== null
-          ? null
-          : state.selectedNodePath;
-      return { subscribers: next, selectedTargets: targets, selectedSourceId, selectedNodePath };
+      return { subscribers: next };
     }),
 
   selectedSourceId: null,
