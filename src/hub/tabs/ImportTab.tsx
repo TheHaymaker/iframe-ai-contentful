@@ -17,7 +17,6 @@ export function ImportTab({ postMessage }: Props) {
   } = useHubStore();
   const [parsedTree, setParsedTree] = useState<ComponentTreeNode[] | null>(null);
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
-  const [mergeMode, setMergeMode] = useState<"append" | "replace">("append");
   const [sent, setSent] = useState(false);
 
   const handleJsonChange = useCallback(
@@ -66,37 +65,12 @@ export function ImportTab({ postMessage }: Props) {
       payload: parsedTree,
       sourceId: "hub",
       targetIds,
-      mergeMode,
     });
     setSent(true);
   }, [parsedTree, getSelectedTargetIds, postMessage, setImportError]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
-      {/* Merge mode toggle */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: "#64748b" }}>Mode:</span>
-        {(["append", "replace"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setMergeMode(mode)}
-            style={{
-              padding: "4px 12px",
-              border: mergeMode === mode ? "2px solid #3b82f6" : "1px solid #e2e8f0",
-              borderRadius: 4,
-              backgroundColor: mergeMode === mode ? "#eff6ff" : "#fff",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: mergeMode === mode ? 600 : 400,
-              textTransform: "capitalize",
-            }}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-
       {/* JSON input */}
       <textarea
         value={importJson}

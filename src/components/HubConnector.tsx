@@ -203,9 +203,9 @@ function HubConnectorInner({
 
   // ── Import handler ────────────────────────────────────────────────────
   const handleImportTree = useCallback(
-    (imported: ComponentTreeNode[], replace?: boolean) => {
+    (imported: ComponentTreeNode[]) => {
       const cloned = cloneWithNewIds(imported);
-      const next = replace ? cloned : [...nodesRef.current, ...cloned];
+      const next = [...nodesRef.current, ...cloned];
       nodesRef.current = next;
       sendToEditor({ type: "TREE_UPDATED", payload: next });
     },
@@ -266,7 +266,7 @@ function HubConnectorInner({
           break;
 
         case "IMPORT_TREE":
-          handleImportTree(msg.payload, msg.mergeMode === "replace");
+          handleImportTree(msg.payload);
           break;
 
         case "BROADCAST_TREE":
