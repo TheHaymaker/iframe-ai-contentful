@@ -24,6 +24,7 @@ export function HubShell() {
     upsertSubscriber,
     setSubscriberTree,
     removeSubscriber,
+    removeStaleSubscribers,
   } = useHubStore();
 
   const postMessageRef = useRef<(msg: HubMessage) => void>(() => {});
@@ -63,6 +64,14 @@ export function HubShell() {
     }, 5000);
     return () => clearInterval(interval);
   }, [postMessage]);
+
+  // Periodically remove subscribers that haven't heartbeated in 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      removeStaleSubscribers(60_000);
+    }, 5_000);
+    return () => clearInterval(interval);
+  }, [removeStaleSubscribers]);
 
   const subscriberCount = subscribers.size;
 
